@@ -47,6 +47,10 @@ return [
         // GET /v1/pricing is cached for estimates; real charges always use each generation's own rates.
         'pricing_cache_seconds' => 3600,
 
+        // Pixelforge allows this many generations queued or processing at once (per account).
+        // We check our own count first, so waiting for a slot costs no API requests.
+        'max_concurrent_generations' => 3,
+
         // Polling fallback (pixelforge:reconcile, every minute). Webhooks are the fast path;
         // polling repairs whatever they miss, using a small share of the 60 requests/minute.
         'polling' => [

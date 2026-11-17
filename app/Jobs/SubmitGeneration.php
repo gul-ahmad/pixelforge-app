@@ -9,6 +9,7 @@ use App\Models\Generation;
 use App\Services\Pixelforge\PixelforgeApiException;
 use App\Services\Pixelforge\PixelforgeClient;
 use App\Services\Pixelforge\ProviderGeneration;
+use Illuminate\Container\Attributes\Config;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,8 +22,10 @@ use Throwable;
  *
  * Retry policy (all retries reuse the generation's Idempotency-Key, so none can double-bill):
  *  - 202                         → ApplyProviderUpdate (status may already be past queued on a replay).
- *  - 429 concurrency limit       → not a failure, just "no free slot yet": wait Retry-After, for up to
- *                                  SLOT_WAIT_MINUTES, then reject. Doesn't count towards the attempt cap.
+ *  - no free slot               → not a failure, just "not yet". Checked LOCALLY first (our own in-flight
+ *                                  count, free), and Pixelforge's 429 concurrency_limit_exceeded is the
+ *                                  backstop. Wait up to SLOT_WAIT_MINUTES, then reject. Doesn't count
+ *                                  towards the attempt cap.
  *  - other 429s / 503 overloaded → nothing was created: back off (≥ Retry-After), max MAX_ATTEMPTS,
  *                                  then reject. (A 429 always means "not created", even without a code.)
  *  - network error / other 5xx   → outcome UNKNOWN (Pixelforge may have created it): back off and retry;
@@ -38,6 +41,12 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
     public const int SLOT_WAIT_MINUTES = 15;
 
     private const int MAX_BACKOFF_SECONDS = 60;
+
+    /** How often a job waiting for a slot re-checks our own database (costs no API requests). */
+    private const int SLOT_CHECK_SECONDS = 5;
+
+    /** In-flight rows older than this are assumed stale (lost webhooks) and don't block new submissions. */
+    private const int STALE_IN_FLIGHT_MINUTES = 30;
 
     /** Releases are governed by the policy above and retryUntil(), not by a fixed try count. */
     public int $tries = 0;
@@ -66,8 +75,12 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
         return now()->addMinutes(self::SLOT_WAIT_MINUTES + 10);
     }
 
-    public function handle(PixelforgeClient $client, ApplyProviderUpdate $applyUpdate, RejectGeneration $reject): void
-    {
+    public function handle(
+        PixelforgeClient $client,
+        ApplyProviderUpdate $applyUpdate,
+        RejectGeneration $reject,
+        #[Config('services.pixelforge.max_concurrent_generations')] int $maxConcurrent,
+    ): void {
         $generation = $this->generation->refresh();
 
         // A webhook, a replay or an earlier run already moved it on: nothing to submit.
@@ -77,6 +90,15 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
 
         if ($generation->submitted_at === null) {
             $generation->forceFill(['submitted_at' => now()])->save();
+        }
+
+        // Every slot is taken by our own generations: wait without spending an API request.
+        // (Repeated 429s while waiting would eat the shared 60 requests/minute and could get
+        // other users' submissions rate-limited.)
+        if ($this->inFlightCount() >= $maxConcurrent) {
+            $this->waitForFreeSlot($generation, self::SLOT_CHECK_SECONDS, $reject);
+
+            return;
         }
 
         try {
@@ -130,7 +152,8 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
     private function handleApiError(Generation $generation, PixelforgeApiException $e, RejectGeneration $reject): void
     {
         if ($e->errorCode === 'concurrency_limit_exceeded') {
-            $this->waitForFreeSlot($generation, $e, $reject);
+            // Slots are taken by something we can't see (e.g. the other API key on the account).
+            $this->waitForFreeSlot($generation, $e->retryAfterSeconds ?? self::SLOT_CHECK_SECONDS, $reject);
 
             return;
         }
@@ -149,7 +172,7 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
         }
     }
 
-    private function waitForFreeSlot(Generation $generation, PixelforgeApiException $e, RejectGeneration $reject): void
+    private function waitForFreeSlot(Generation $generation, int $delaySeconds, RejectGeneration $reject): void
     {
         $waitingSince = $generation->submitted_at ?? $generation->created_at ?? now();
 
@@ -161,7 +184,16 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
         }
 
         $this->noteRetry($generation, 'concurrency_limit_exceeded', 'Waiting for a free generation slot…');
-        $this->release($e->retryAfterSeconds ?? 5);
+        $this->release($delaySeconds);
+    }
+
+    /** Our generations currently occupying a Pixelforge slot (recent queued/processing ones). */
+    private function inFlightCount(): int
+    {
+        return Generation::query()
+            ->whereIn('status', [GenerationStatus::Queued, GenerationStatus::Processing])
+            ->where('created_at', '>', now()->subMinutes(self::STALE_IN_FLIGHT_MINUTES))
+            ->count();
     }
 
     /** Rate limited or overloaded: Pixelforge guarantees nothing was created, so giving up is safe. */

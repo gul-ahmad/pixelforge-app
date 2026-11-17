@@ -158,6 +158,53 @@ describe('rate limits and overloads (nothing was created)', function () {
 });
 
 describe('concurrency limit (wait for a free slot)', function () {
+    it('waits locally, without calling Pixelforge, when our own generations fill every slot', function () {
+        Generation::factory()->count(2)->withStatus(GenerationStatus::Processing)->create();
+        Generation::factory()->withStatus(GenerationStatus::Queued)->create();
+        $generation = Generation::factory()->create();
+        Http::fake();
+
+        runSubmit($generation)->assertReleased(delay: 5);
+
+        Http::assertNothingSent();
+        expect($generation->refresh()->status)->toBe(GenerationStatus::Pending)
+            ->and($generation->submit_attempts)->toBe(0)
+            ->and($generation->error_message)->toBe('Waiting for a free generation slot…');
+    });
+
+    it('submits as soon as a slot is free', function () {
+        Generation::factory()->count(2)->withStatus(GenerationStatus::Processing)->create();
+        Generation::factory()->withStatus(GenerationStatus::Succeeded)->create();
+        $generation = Generation::factory()->create();
+        Http::fake([CREATE_URL => accepted($generation)]);
+
+        runSubmit($generation)->assertNotReleased();
+
+        expect($generation->refresh()->status)->toBe(GenerationStatus::Queued);
+    });
+
+    it('does not let stale in-flight rows (lost webhooks) block submissions forever', function () {
+        Generation::factory()->count(3)->withStatus(GenerationStatus::Processing)->create(['created_at' => now()->subMinutes(31)]);
+        $generation = Generation::factory()->create();
+        Http::fake([CREATE_URL => accepted($generation)]);
+
+        runSubmit($generation)->assertNotReleased();
+
+        expect($generation->refresh()->status)->toBe(GenerationStatus::Queued);
+    });
+
+    it('still gives up after the slot-wait budget when waiting locally', function () {
+        Generation::factory()->count(3)->withStatus(GenerationStatus::Processing)->create();
+        $generation = Generation::factory()->create();
+        $generation->forceFill(['submitted_at' => now()->subMinutes(SubmitGeneration::SLOT_WAIT_MINUTES + 1)])->save();
+        Http::fake();
+
+        runSubmit($generation)->assertNotReleased();
+
+        Http::assertNothingSent();
+        expect($generation->refresh()->status)->toBe(GenerationStatus::Rejected);
+    });
+
     it('waits Retry-After without using up an attempt', function () {
         $generation = Generation::factory()->create();
         Http::fake([CREATE_URL => pixelforgeError(429, 'concurrency_limit_exceeded', retryAfter: 5)]);
