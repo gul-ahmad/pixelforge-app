@@ -5,13 +5,13 @@ namespace App\Models;
 use App\Enums\GenerationStatus;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
+use Carbon\CarbonImmutable;
 use Database\Factories\GenerationFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * One image generation requested by a user, and what it cost them.
@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string $id
  * @property int|null $user_id
  * @property string $idempotency_key
+ * @property string|null $client_request_id
  * @property string|null $provider_generation_id
  * @property GenerationStatus $status
  * @property string $prompt
@@ -36,21 +37,22 @@ use Illuminate\Support\Carbon;
  * @property int|null $provider_cost_nano_usd
  * @property int|null $charged_micro_usd
  * @property string|null $image_url
- * @property Carbon|null $image_url_expires_at
+ * @property CarbonImmutable|null $image_url_expires_at
  * @property string|null $error_code
  * @property string|null $error_message
  * @property int $submit_attempts
- * @property Carbon|null $submitted_at
- * @property Carbon|null $started_at
- * @property Carbon|null $completed_at
- * @property Carbon|null $last_synced_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $submitted_at
+ * @property CarbonImmutable|null $started_at
+ * @property CarbonImmutable|null $completed_at
+ * @property CarbonImmutable|null $last_synced_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  * @property-read User|null $user
  */
 #[Fillable([
     'user_id',
     'idempotency_key',
+    'client_request_id',
     'prompt',
     'size',
     'quality',
@@ -108,9 +110,9 @@ class Generation extends Model
     }
 
     /** Pixelforge image URLs are signed and stop working 24 hours after completion. */
-    public function imageUrlHasExpired(?Carbon $now = null): bool
+    public function imageUrlHasExpired(?CarbonImmutable $now = null): bool
     {
         return $this->image_url_expires_at !== null
-            && $this->image_url_expires_at->lessThanOrEqualTo($now ?? Carbon::now());
+            && $this->image_url_expires_at->lessThanOrEqualTo($now ?? CarbonImmutable::now());
     }
 }
