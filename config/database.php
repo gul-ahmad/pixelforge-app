@@ -58,6 +58,9 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'strict' => true,
+            // Store and read TIMESTAMPs in UTC regardless of the server's zone, so
+            // "per UTC day" money reports match Pixelforge's GET /v1/usage.
+            'timezone' => '+00:00',
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 Mysql::ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
