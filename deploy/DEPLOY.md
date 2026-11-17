@@ -3,12 +3,12 @@
 Target: `http://YOUR_SERVER_IP:8200` on the shared Ubuntu 24.04 server, following the server
 admin's rules. Other apps on this server must not be affected.
 
-| Choice | Why |
-|---|---|
-| **PHP 8.4 next to 8.2** | Laravel 13 / Symfony 8 need PHP ≥ 8.4.1. The server default stays 8.2; this app always calls `php8.4` explicitly. |
-| **SQLite** | No MySQL on the server. `config/database.php` runs SQLite with `IMMEDIATE` transactions + WAL, so concurrent updates are serialized (our "charge exactly once" guarantee). The test suite passes on both MySQL and SQLite. |
-| **Cron runs the queue worker** | No Supervisor. Cron starts `queue:work --max-time=55` every minute; `flock` keeps it to one worker. |
-| **Basic auth on the whole site, except `/webhooks/pixelforge`** | Admin's template. Pixelforge can't send a password; the webhook is authenticated by its HMAC signature in the app instead. |
+| Choice                                                          | Why                                                                                                                                                                                                                        |
+| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **PHP 8.4 next to 8.2**                                         | Laravel 13 / Symfony 8 need PHP ≥ 8.4.1. The server default stays 8.2; this app always calls `php8.4` explicitly.                                                                                                          |
+| **SQLite**                                                      | No MySQL on the server. `config/database.php` runs SQLite with `IMMEDIATE` transactions + WAL, so concurrent updates are serialized (our "charge exactly once" guarantee). The test suite passes on both MySQL and SQLite. |
+| **Cron runs the queue worker**                                  | No Supervisor. Cron starts `queue:work --max-time=55` every minute; `flock` keeps it to one worker.                                                                                                                        |
+| **Basic auth on the whole site, except `/webhooks/pixelforge`** | Admin's template. Pixelforge can't send a password; the webhook is authenticated by its HMAC signature in the app instead.                                                                                                 |
 
 Run everything below in **your own SSH session** (`ssh YOUR_SSH_USER@YOUR_SERVER_IP`). Type passwords
 carefully: 5 wrong attempts in 10 minutes bans your IP (fail2ban).
