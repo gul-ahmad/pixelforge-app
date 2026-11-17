@@ -46,6 +46,21 @@ return [
 
         // GET /v1/pricing is cached for estimates; real charges always use each generation's own rates.
         'pricing_cache_seconds' => 3600,
+
+        // Polling fallback (pixelforge:reconcile, every minute). Webhooks are the fast path;
+        // polling repairs whatever they miss, using a small share of the 60 requests/minute.
+        'polling' => [
+            // Poll an in-flight generation if nothing (webhook or poll) updated it for this long.
+            'stale_after_seconds' => 120,
+            // Max GET requests per run.
+            'batch_size' => 10,
+            // A generation still pending this long after creation gets its submit job re-queued…
+            'resubmit_pending_after_seconds' => 120,
+            // …until this age, after which we stop trying and mark it rejected (never billed).
+            'give_up_pending_after_minutes' => 60,
+            // Re-queue webhook events that were stored but never processed after this long.
+            'retry_events_after_seconds' => 300,
+        ],
     ],
 
     'slack' => [
