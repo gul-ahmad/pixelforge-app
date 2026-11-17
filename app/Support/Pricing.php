@@ -109,7 +109,7 @@ final class Pricing
      */
     public static function estimate(
         PricingSheet $sheet,
-        string $prompt,
+        int $promptCharacters,
         int $referenceImageCount,
         ImageSize $size,
         ImageQuality $quality,
@@ -118,7 +118,7 @@ final class Pricing
             throw new InvalidArgumentException('Reference image count cannot be negative.');
         }
 
-        [$minTextTokens, $maxTextTokens] = self::textTokenRange($sheet, $prompt);
+        [$minTextTokens, $maxTextTokens] = self::textTokenRange($sheet, $promptCharacters);
         $imageTokens = $referenceImageCount * $sheet->tokensPerReferenceImage;
         $outputTokens = $sheet->outputTokensFor($quality, $size);
         $reasoning = $sheet->reasoningRange($quality);
@@ -146,14 +146,18 @@ final class Pricing
     }
 
     /**
-     * Estimated text tokens are ceil(characters / 4), counting Unicode characters (not bytes).
-     * The real count is within ±variance of that, so: floor(est × 0.85) … ceil(est × 1.15).
+     * Estimated text tokens are ceil(characters / 4), where characters are Unicode characters
+     * (mb_strlen), not bytes. The real count is within ±variance of that, so:
+     * floor(est × 0.85) … ceil(est × 1.15).
      *
      * @return array{0: int, 1: int}
      */
-    public static function textTokenRange(PricingSheet $sheet, string $prompt): array
+    public static function textTokenRange(PricingSheet $sheet, int $characters): array
     {
-        $characters = mb_strlen($prompt, 'UTF-8');
+        if ($characters < 0) {
+            throw new InvalidArgumentException('Character count cannot be negative.');
+        }
+
         $estimate = intdiv($characters + $sheet->charactersPerTextToken - 1, $sheet->charactersPerTextToken);
         $variance = BigDecimal::of($sheet->textTokenVariance);
 

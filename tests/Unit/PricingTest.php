@@ -132,7 +132,7 @@ describe('customer charge (cost × 1.25, half-up to micro-USD)', function () {
 
 describe('estimate (before submit)', function () {
     it('matches the docs worked example for the maximum: $0.373875 cost → $0.467344 charged', function () {
-        $estimate = Pricing::estimate(sheet(), str_repeat('a', 400), 2, ImageSize::Landscape, ImageQuality::High);
+        $estimate = Pricing::estimate(sheet(), 400, 2, ImageSize::Landscape, ImageQuality::High);
 
         expect($estimate->maxTokens)->toBe([
             'input_text_tokens' => 115,
@@ -143,7 +143,7 @@ describe('estimate (before submit)', function () {
     });
 
     it('uses the lowest text and reasoning tokens for the minimum', function () {
-        $estimate = Pricing::estimate(sheet(), str_repeat('a', 400), 2, ImageSize::Landscape, ImageQuality::High);
+        $estimate = Pricing::estimate(sheet(), 400, 2, ImageSize::Landscape, ImageQuality::High);
 
         // 85×5 + 1530×10 + 6450×40 + 1000×12.5 = 286,225 micro cost → ×1.25 = 357,781.25 → 357,781
         expect($estimate->minTokens)->toBe([
@@ -154,28 +154,24 @@ describe('estimate (before submit)', function () {
         ])->and($estimate->minMicroUsd)->toBe(357_781);
     });
 
-    it('counts Unicode characters, not bytes', function () {
-        // 8 characters but 16 bytes: ceil(8 / 4) = 2 tokens, so 1 … 3.
-        expect(Pricing::textTokenRange(sheet(), str_repeat('é', 8)))->toBe([1, 3]);
-    });
-
-    it('rounds the text token range outwards', function (string $prompt, array $range) {
-        expect(Pricing::textTokenRange(sheet(), $prompt))->toBe($range);
+    it('rounds the text token range outwards', function (int $characters, array $range) {
+        expect(Pricing::textTokenRange(sheet(), $characters))->toBe($range);
     })->with([
-        '1 char → est 1 → 0…2' => ['a', [0, 2]],
-        '5 chars → est 2 (ceil) → 1…3' => ['abcde', [1, 3]],
-        '400 chars → est 100 → 85…115' => [str_repeat('a', 400), [85, 115]],
-        '4000 chars → est 1000 → 850…1150' => [str_repeat('a', 4000), [850, 1150]],
+        '0 chars → 0…0' => [0, [0, 0]],
+        '1 char → est 1 → 0…2' => [1, [0, 2]],
+        '5 chars → est 2 (ceil) → 1…3' => [5, [1, 3]],
+        '400 chars → est 100 → 85…115' => [400, [85, 115]],
+        '4000 chars → est 1000 → 850…1150' => [4000, [850, 1150]],
     ]);
 
     it('always contains the real charge, for every size, quality and image count', function () {
         $sheet = sheet();
-        $prompt = str_repeat('x', 237);    // est 60 → 51…69 text tokens
+        $characters = 237;    // est 60 → 51…69 text tokens
 
         foreach (ImageQuality::cases() as $quality) {
             foreach (ImageSize::cases() as $size) {
                 foreach ([0, 1, 4] as $images) {
-                    $estimate = Pricing::estimate($sheet, $prompt, $images, $size, $quality);
+                    $estimate = Pricing::estimate($sheet, $characters, $images, $size, $quality);
                     $reasoning = $sheet->reasoningRange($quality);
 
                     // Every extreme combination the docs allow for the real outcome.
@@ -197,7 +193,7 @@ describe('estimate (before submit)', function () {
     });
 
     it('exposes formatted amounts for the UI', function () {
-        $estimate = Pricing::estimate(sheet(), str_repeat('a', 400), 2, ImageSize::Landscape, ImageQuality::High);
+        $estimate = Pricing::estimate(sheet(), 400, 2, ImageSize::Landscape, ImageQuality::High);
 
         expect($estimate->toArray())->toMatchArray([
             'min_micro_usd' => 357_781,
