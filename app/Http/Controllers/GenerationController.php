@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Actions\Generations\CreateGeneration;
 use App\Actions\Generations\EstimateGenerationCost;
+use App\Enums\GenerationStatus;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
 use App\Exceptions\PricingUnavailableException;
 use App\Http\Requests\Generations\StoreGenerationRequest;
 use App\Http\Resources\GenerationResource;
+use App\Support\Pricing;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -18,21 +20,51 @@ use Inertia\Response;
 
 class GenerationController extends Controller
 {
-    /** History: the user's generations, newest first. */
+    /**
+     * History: the user's generations, newest first.
+     * Props are closures so the page's live polling can reload just what it needs.
+     */
     public function index(Request $request): Response
     {
-        $generations = $request->user()->generations()->latest()->latest('id')->paginate(20);
+        $user = $request->user();
 
         return Inertia::render('generations/Index', [
-            'generations' => GenerationResource::collection($generations),
+            'generations' => fn () => GenerationResource::collection(
+                $user->generations()->latest()->latest('id')->paginate(20)
+            ),
+            'summary' => fn () => [
+                'total_charged' => Pricing::formatMicroUsd(
+                    (int) $user->generations()->where('status', GenerationStatus::Succeeded)->sum('charged_micro_usd')
+                ),
+                'succeeded' => $user->generations()->where('status', GenerationStatus::Succeeded)->count(),
+            ],
         ]);
     }
 
-    /** The generate form, with the options and a starting estimate. */
-    public function create(EstimateGenerationCost $estimate): Response
+    /**
+     * The generate form, with the options and a starting estimate.
+     * ?from={id} pre-fills it from one of the user's earlier generations ("Try again").
+     */
+    public function create(Request $request, EstimateGenerationCost $estimate): Response
     {
+        $from = $request->filled('from')
+            ? $request->user()->generations()->find($request->string('from')->toString())
+            : null;
+
+        $prefill = [
+            'prompt' => $from->prompt ?? '',
+            'size' => ($from->size ?? ImageSize::Square)->value,
+            'quality' => ($from->quality ?? ImageQuality::Medium)->value,
+            'reference_images' => $from->reference_images ?? [],
+        ];
+
         try {
-            $initialEstimate = $estimate->handle(0, 0, ImageSize::Square, ImageQuality::Medium)->toArray();
+            $initialEstimate = $estimate->handle(
+                mb_strlen($prefill['prompt'], 'UTF-8'),
+                count($prefill['reference_images']),
+                ImageSize::from($prefill['size']),
+                ImageQuality::from($prefill['quality']),
+            )->toArray();
         } catch (PricingUnavailableException) {
             $initialEstimate = null;
         }
@@ -45,6 +77,7 @@ class GenerationController extends Controller
                 'reference_images' => StoreGenerationRequest::MAX_REFERENCE_IMAGES,
             ],
             'initialEstimate' => $initialEstimate,
+            'prefill' => $prefill,
             // A fresh id per rendered form; resubmitting this form can't create a second generation.
             'clientRequestId' => (string) Str::uuid(),
         ]);

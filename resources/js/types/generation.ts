@@ -14,9 +14,15 @@ export type Generation = {
     quality: string;
     reference_images: string[];
     status: GenerationStatus;
+    status_label: string;
+    /** Plain-English explanation of the current state or error; null when there is nothing to say. */
+    status_message: string | null;
+    /** Pending, and the last attempt hit a temporary problem (busy, rate limit, network). */
+    is_retrying: boolean;
     is_terminal: boolean;
     estimate: { min: string; max: string };
     charged: string | null;
+    charge_note: string;
     image_url: string | null;
     image_expired: boolean;
     image_url_expires_at: string | null;
@@ -46,4 +52,13 @@ export type Paginated<T> = {
         next: string | null;
     };
     meta: { current_page: number; last_page: number; total: number };
+};
+
+export type GenerationSummary = { total_charged: string; succeeded: number };
+
+export type GenerationPrefill = {
+    prompt: string;
+    size: string;
+    quality: string;
+    reference_images: string[];
 };

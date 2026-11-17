@@ -71,6 +71,19 @@ enum GenerationStatus: string
         return in_array($this, [self::Queued, self::Processing], true);
     }
 
+    /** Short label for the status badge. */
+    public function label(): string
+    {
+        return match ($this) {
+            self::Pending => 'Submitting',
+            self::Queued => 'Queued',
+            self::Processing => 'Generating',
+            self::Succeeded => 'Succeeded',
+            self::Failed => 'Failed',
+            self::Rejected => 'Not accepted',
+        };
+    }
+
     public function isProviderStatus(): bool
     {
         return in_array($this, [self::Queued, self::Processing, self::Succeeded, self::Failed], true);

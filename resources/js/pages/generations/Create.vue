@@ -9,7 +9,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { create, estimate as estimateRoute, store } from '@/routes/generations';
-import type { CostEstimate, SelectOption } from '@/types/generation';
+import type {
+    CostEstimate,
+    GenerationPrefill,
+    SelectOption,
+} from '@/types/generation';
 
 const props = defineProps<{
     sizes: SelectOption[];
@@ -17,6 +21,8 @@ const props = defineProps<{
     limits: { prompt: number; reference_images: number };
     initialEstimate: CostEstimate | null;
     clientRequestId: string;
+    /** Empty values, or an earlier generation's inputs when the user clicked "Try again". */
+    prefill: GenerationPrefill;
 }>();
 
 defineOptions({
@@ -28,10 +34,10 @@ defineOptions({
 const form = useForm({
     // Same id on every resubmit of this form, so a double submit can't create two generations.
     client_request_id: props.clientRequestId,
-    prompt: '',
-    size: '1024x1024',
-    quality: 'medium',
-    reference_images: [] as string[],
+    prompt: props.prefill.prompt,
+    size: props.prefill.size,
+    quality: props.prefill.quality,
+    reference_images: [...props.prefill.reference_images],
 });
 
 // Unicode characters, the same way the server (mb_strlen) and Pixelforge count them.
