@@ -1,0 +1,10 @@
+# Crontab for user your-app-user  (install: sudo crontab -u your-app-user deploy/crontab.txt)
+#
+# 1. Laravel scheduler: runs pixelforge:reconcile (polling fallback) every minute.
+* * * * * cd /var/www/your-app/pixelforge && /usr/bin/php8.4 artisan schedule:run >> /dev/null 2>&1
+#
+# 2. Queue worker (the server has no Supervisor). Cron starts a worker every minute; it runs
+#    for 55 seconds and exits, so there's almost always one running. flock guarantees at most
+#    one at a time. After a deploy, "artisan queue:restart" makes it exit and cron starts a
+#    fresh one with the new code within a minute.
+* * * * * cd /var/www/your-app/pixelforge && /usr/bin/flock -n storage/framework/queue-worker.lock /usr/bin/php8.4 artisan queue:work --sleep=1 --max-time=55 >> storage/logs/worker.log 2>&1
