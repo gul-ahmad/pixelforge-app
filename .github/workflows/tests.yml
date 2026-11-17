@@ -13,7 +13,26 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # Tests run against real MySQL (not SQLite) so row locks (lockForUpdate),
+    # unique indexes and integer money columns behave exactly as in production.
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: pixelforge
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
     steps:
+      - name: Create test database
+        run: mysql -h 127.0.0.1 -u root -e "CREATE DATABASE IF NOT EXISTS pixelforge_testing"
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -22,7 +41,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
-          php-version: '8.3'
+          php-version: '8.4'
           tools: composer:v2
           coverage: none
 
