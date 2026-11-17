@@ -69,13 +69,22 @@ final readonly class ProviderGeneration
             localGenerationId: is_string($localId) ? $localId : null,
             rates: $rates,
             usage: is_array($usage) ? $usage : null,
-            imageUrl: is_string($data['image_url'] ?? null) ? $data['image_url'] : null,
+            imageUrl: self::httpsUrl($data['image_url'] ?? null),
             imageUrlExpiresAt: self::time($data['image_url_expires_at'] ?? null),
             errorCode: is_array($error) && is_string($error['code'] ?? null) ? $error['code'] : null,
             errorMessage: is_array($error) && is_string($error['message'] ?? null) ? $error['message'] : null,
             startedAt: self::time($data['started_at'] ?? null),
             completedAt: self::time($data['completed_at'] ?? null),
         );
+    }
+
+    /**
+     * The image URL ends up in <a href> and <img src>. Only accept https:// URLs, so a bad or
+     * tampered response can never inject something like "javascript:…" into our pages.
+     */
+    private static function httpsUrl(mixed $value): ?string
+    {
+        return is_string($value) && str_starts_with(strtolower($value), 'https://') ? $value : null;
     }
 
     private static function time(mixed $value): ?CarbonImmutable
