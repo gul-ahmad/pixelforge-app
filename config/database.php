@@ -38,10 +38,16 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
-            'synchronous' => null,
-            'transaction_mode' => 'DEFERRED',
+            // Production runs on SQLite (the deploy server has no MySQL). SQLite has no row
+            // locks, so lockForUpdate() is a no-op there. IMMEDIATE makes every transaction
+            // take the database's write lock when it starts: concurrent updates (a webhook
+            // and a poll for the same generation) run strictly one after another, which is
+            // what "charge exactly once" relies on. WAL lets readers work while one writes;
+            // busy_timeout makes a second writer wait instead of failing immediately.
+            'busy_timeout' => 10000,
+            'journal_mode' => 'wal',
+            'synchronous' => 'normal',
+            'transaction_mode' => 'IMMEDIATE',
         ],
 
         'mysql' => [

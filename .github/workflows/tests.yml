@@ -13,6 +13,12 @@ jobs:
   ci:
     runs-on: ubuntu-latest
 
+    # Dev uses MySQL; the production server uses SQLite. Run the whole suite on both.
+    strategy:
+      fail-fast: false
+      matrix:
+        database: [mysql, sqlite]
+
     # Tests run against real MySQL (not SQLite) so row locks (lockForUpdate),
     # unique indexes and integer money columns behave exactly as in production.
     services:
@@ -53,5 +59,13 @@ jobs:
       - name: Setup Application
         run: composer setup
 
-      - name: Run CI Checks
+      - name: Run CI Checks (MySQL)
+        if: matrix.database == 'mysql'
         run: composer ci:check
+
+      - name: Run tests (SQLite)
+        if: matrix.database == 'sqlite'
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php artisan test

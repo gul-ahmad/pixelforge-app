@@ -105,6 +105,6 @@ it('stores each webhook event only once', function () {
     WebhookEvent::create([...$attributes, 'delivery_attempt' => 2]);
 })->throws(UniqueConstraintViolationException::class);
 
-it('runs the database session in UTC so per-day money reports match Pixelforge', function () {
+it('runs the MySQL session in UTC so per-day money reports match Pixelforge', function () {
     expect(DB::selectOne('select @@session.time_zone as tz')->tz)->toBe('+00:00');
-});
+})->skip(fn () => DB::getDriverName() !== 'mysql', 'MySQL-only: SQLite stores the UTC strings Laravel writes as-is.');
