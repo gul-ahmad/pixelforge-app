@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /*
@@ -16,6 +17,8 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
+    // Tests must never reach the real Pixelforge API: every call has to be faked.
+    ->beforeEach(fn () => Http::preventStrayRequests())
     ->in('Feature');
 
 /*
@@ -56,4 +59,15 @@ function pixelforgeFixture(string $name): array
         true,
         flags: JSON_THROW_ON_ERROR,
     );
+}
+
+/**
+ * A Pixelforge generation object (the docs example), with overrides.
+ *
+ * @param  array<string, mixed>  $overrides
+ * @return array<string, mixed>
+ */
+function pixelforgeGeneration(string $state = 'queued', array $overrides = []): array
+{
+    return array_replace(pixelforgeFixture("generation_{$state}"), $overrides);
 }

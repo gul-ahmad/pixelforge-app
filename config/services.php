@@ -41,6 +41,8 @@ return [
         // HTTP timeouts for calls to the API, in seconds.
         'timeout' => 15,
         'connect_timeout' => 5,
+        // Pricing is fetched during page requests; never make a user wait long for it.
+        'pricing_timeout' => 5,
 
         // GET /v1/pricing is cached for estimates; real charges always use each generation's own rates.
         'pricing_cache_seconds' => 3600,

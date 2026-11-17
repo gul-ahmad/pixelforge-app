@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 
 /**
  * A verified Pixelforge webhook delivery, stored once per provider event id.
@@ -15,10 +15,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $provider_generation_id
  * @property int $delivery_attempt
  * @property array<string, mixed> $payload
- * @property Carbon $received_at
- * @property Carbon|null $processed_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable $received_at
+ * @property CarbonImmutable|null $processed_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 #[Fillable([
     'provider_event_id',

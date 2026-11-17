@@ -6,8 +6,8 @@ use App\Enums\ImageSize;
 use App\Models\Generation;
 use App\Models\User;
 use App\Models\WebhookEvent;
+use Carbon\CarbonImmutable as Carbon;
 use Illuminate\Database\UniqueConstraintViolationException;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 

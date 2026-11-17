@@ -31,6 +31,9 @@
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <env name="PIXELFORGE_BASE_URL" value="https://pixelforge.test/v1"/>
+        <env name="PIXELFORGE_API_KEY" value="pf_test_key"/>
+        <env name="PIXELFORGE_WEBHOOK_SECRET" value="whsec_test_secret"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
 </phpunit>
