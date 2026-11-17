@@ -139,9 +139,12 @@ function imageError(index: number): string | undefined {
 
 /* ---------- Submit ---------- */
 
-const pricingError = computed(
-    () => (form.errors as Record<string, string | undefined>).pricing,
-);
+// Form-level problems shown next to the button: pricing unavailable, or submitting too fast.
+const formError = computed(() => {
+    const errors = form.errors as Record<string, string | undefined>;
+
+    return errors.pricing ?? errors.submit;
+});
 
 const canSubmit = computed(
     () =>
@@ -348,7 +351,7 @@ function submit(): void {
                         </p>
                     </div>
 
-                    <InputError :message="pricingError" />
+                    <InputError :message="formError" />
 
                     <Button
                         type="submit"

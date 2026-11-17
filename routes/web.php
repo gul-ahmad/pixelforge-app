@@ -15,11 +15,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Each submit can cost money and uses our shared Pixelforge rate limit.
     Route::post('generations', [GenerationController::class, 'store'])
-        ->middleware('throttle:10,1')
+        ->middleware('throttle:generation-submits')
         ->name('generations.store');
 
     Route::get('generations/estimate', EstimateGenerationCostController::class)
-        ->middleware('throttle:120,1')
+        ->middleware('throttle:generation-estimates')
         ->name('generations.estimate');
 });
 

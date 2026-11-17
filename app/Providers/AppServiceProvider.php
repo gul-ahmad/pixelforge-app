@@ -3,8 +3,11 @@
 namespace App\Providers;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -24,6 +27,25 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureRateLimiting();
+    }
+
+    /**
+     * Named limiters, each with its own key. (Plain "throttle:10,1" keys only by user, so every
+     * throttled route shares one counter: live estimates while typing used up the submit limit.)
+     */
+    protected function configureRateLimiting(): void
+    {
+        // Each submit can cost money and uses the account's shared 60 requests/minute at Pixelforge.
+        RateLimiter::for('generation-submits', fn (Request $request) => Limit::perMinute(10)
+            ->by('submit:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+            ->response(fn () => back()->withErrors([
+                'submit' => "You're submitting too quickly. Please wait a minute and try again.",
+            ])));
+
+        // The live estimate fires while typing; cheap (cached pricing, no Pixelforge call).
+        RateLimiter::for('generation-estimates', fn (Request $request) => Limit::perMinute(120)
+            ->by('estimate:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));
     }
 
     /**

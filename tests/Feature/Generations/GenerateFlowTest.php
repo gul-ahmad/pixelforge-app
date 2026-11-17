@@ -163,6 +163,55 @@ describe('submitting', function () {
     });
 });
 
+describe('rate limits', function () {
+    it('lets a user submit after typing a long prompt (live estimates have their own limit)', function () {
+        // Reproduces a production bug: estimates and submits shared one throttle counter,
+        // so ~10 live estimates while typing made the submit itself fail with 429.
+        $user = User::factory()->create();
+
+        foreach (range(1, 30) as $characters) {
+            $this->actingAs($user)
+                ->getJson(route('generations.estimate', ['characters' => $characters, 'reference_images' => 0, 'size' => '1024x1024', 'quality' => 'low']))
+                ->assertOk();
+        }
+
+        $this->actingAs($user)
+            ->post(route('generations.store'), validInput())
+            ->assertRedirect(route('generations.index'));
+
+        expect(Generation::count())->toBe(1);
+    });
+
+    it('still limits submits to 10 a minute, with a friendly message instead of an error page', function () {
+        $user = User::factory()->create();
+
+        foreach (range(1, 10) as $i) {
+            $this->actingAs($user)->post(route('generations.store'), validInput())->assertRedirect(route('generations.index'));
+        }
+
+        $this->actingAs($user)
+            ->from(route('generations.create'))
+            ->post(route('generations.store'), validInput())
+            ->assertRedirect(route('generations.create'))
+            ->assertSessionHasErrors('submit');
+
+        expect(Generation::count())->toBe(10);
+    });
+
+    it('limits live estimates separately, per user', function () {
+        $user = User::factory()->create();
+        $query = ['characters' => 1, 'reference_images' => 0, 'size' => '1024x1024', 'quality' => 'low'];
+
+        foreach (range(1, 120) as $i) {
+            $this->actingAs($user)->getJson(route('generations.estimate', $query))->assertOk();
+        }
+
+        $this->actingAs($user)->getJson(route('generations.estimate', $query))->assertStatus(429);
+        // Another user is unaffected.
+        $this->actingAs(User::factory()->create())->getJson(route('generations.estimate', $query))->assertOk();
+    });
+});
+
 describe('live estimate', function () {
     it('returns the range for the chosen options', function () {
         $this->actingAs(User::factory()->create())
