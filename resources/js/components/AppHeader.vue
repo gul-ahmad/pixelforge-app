@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { BookOpen, Folder, LayoutGrid, Menu, Search } from '@lucide/vue';
+import { BookOpen, Folder, History, Menu, Search, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
@@ -36,6 +36,7 @@ import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
+import { create as generate, index as history } from '@/routes/generations';
 import type { BreadcrumbItem, NavItem } from '@/types';
 
 type Props = {
@@ -55,21 +56,26 @@ const activeItemStyles =
 
 const mainNavItems: NavItem[] = [
     {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+        title: 'Generate',
+        href: generate(),
+        icon: Sparkles,
+    },
+    {
+        title: 'History',
+        href: history(),
+        icon: History,
     },
 ];
 
 const rightNavItems: NavItem[] = [
     {
-        title: 'Repository',
-        href: 'https://github.com/laravel/vue-starter-kit',
+        title: 'Source code',
+        href: 'https://github.com/gul-ahmad/pixelforge-app',
         icon: Folder,
     },
     {
-        title: 'Documentation',
-        href: 'https://laravel.com/docs/starter-kits#vue',
+        title: 'Pixelforge API docs',
+        href: 'https://pixelforge.promptedit.dev/docs',
         icon: BookOpen,
     },
 ];

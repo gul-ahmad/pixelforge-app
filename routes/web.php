@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Route;
 Route::inertia('/', 'Welcome')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    // The starter kit's empty dashboard: send people straight to their history instead.
+    Route::redirect('dashboard', '/generations')->name('dashboard');
 
     Route::get('generations', [GenerationController::class, 'index'])->name('generations.index');
     Route::get('generations/create', [GenerationController::class, 'create'])->name('generations.create');
