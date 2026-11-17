@@ -44,7 +44,16 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Decoded JSON of a recorded Pixelforge response from tests/Fixtures/pixelforge.
+ *
+ * @return array<string, mixed>
+ */
+function pixelforgeFixture(string $name): array
 {
-    // ..
+    return json_decode(
+        (string) file_get_contents(__DIR__."/Fixtures/pixelforge/{$name}.json"),
+        true,
+        flags: JSON_THROW_ON_ERROR,
+    );
 }
