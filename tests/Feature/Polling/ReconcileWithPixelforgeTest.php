@@ -167,6 +167,16 @@ describe('stuck pending generations', function () {
             ->and($old->charged_micro_usd)->toBe(0);
         Queue::assertNotPushed(SubmitGeneration::class);
     });
+
+    it('never gives up on one whose outcome is unknown: keeps replaying the same key', function () {
+        $unknown = Generation::factory()->create(['created_at' => now()->subHours(3)]);
+        $unknown->forceFill(['submit_outcome_unknown' => true])->save();
+
+        reconcile();
+
+        expect($unknown->refresh()->status)->toBe(GenerationStatus::Pending);
+        Queue::assertPushed(SubmitGeneration::class, fn (SubmitGeneration $job) => $job->generation->is($unknown));
+    });
 });
 
 describe('unprocessed webhook events', function () {

@@ -42,6 +42,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $error_code
  * @property string|null $error_message
  * @property int $submit_attempts
+ * @property bool $submit_outcome_unknown
  * @property CarbonImmutable|null $submitted_at
  * @property CarbonImmutable|null $started_at
  * @property CarbonImmutable|null $completed_at
@@ -75,6 +76,7 @@ class Generation extends Model
         'status' => 'pending',
         'reference_images' => '[]',
         'submit_attempts' => 0,
+        'submit_outcome_unknown' => false,
         'reserved_micro_usd' => 0,
     ];
 
@@ -96,6 +98,7 @@ class Generation extends Model
             'provider_cost_nano_usd' => 'integer',
             'charged_micro_usd' => 'integer',
             'submit_attempts' => 'integer',
+            'submit_outcome_unknown' => 'boolean',
             'image_url_expires_at' => 'datetime',
             'submitted_at' => 'datetime',
             'started_at' => 'datetime',

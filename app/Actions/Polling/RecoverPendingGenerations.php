@@ -16,6 +16,9 @@ use Illuminate\Container\Attributes\Config;
  *   create it, the retry just replays it. ShouldBeUnique stops a second copy while one runs.
  * - After the give-up age, stop and mark it rejected (not billed). If Pixelforge later reports
  *   it after all, ApplyProviderUpdate lets the provider's state win (rejected → succeeded).
+ * - EXCEPT when an attempt had an unknown outcome (submit_outcome_unknown): Pixelforge may have
+ *   created it, so "not charged" could be a lie. Those are never given up; we keep replaying the
+ *   same key (Pixelforge keys never expire) until it answers 202 or refuses definitively.
  */
 class RecoverPendingGenerations
 {
@@ -35,6 +38,7 @@ class RecoverPendingGenerations
 
         $tooOld = Generation::query()
             ->where('status', GenerationStatus::Pending)
+            ->where('submit_outcome_unknown', false)
             ->where('created_at', '<=', $giveUpBefore)
             ->limit($this->batchSize)
             ->get();
@@ -47,7 +51,9 @@ class RecoverPendingGenerations
         $stuck = Generation::query()
             ->where('status', GenerationStatus::Pending)
             ->where('created_at', '<=', now()->subSeconds($this->resubmitAfterSeconds))
-            ->where('created_at', '>', $giveUpBefore)
+            ->where(fn ($query) => $query
+                ->where('created_at', '>', $giveUpBefore)
+                ->orWhere('submit_outcome_unknown', true))
             ->oldest()
             ->limit($this->batchSize)
             ->get();

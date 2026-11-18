@@ -172,6 +172,21 @@ describe('concurrency limit (wait for a free slot)', function () {
             ->and($generation->error_message)->toBe('Waiting for a free generation slot…');
     });
 
+    it('after an unknown outcome, asks Pixelforge instead of waiting (and never rejecting) locally', function () {
+        Generation::factory()->count(3)->withStatus(GenerationStatus::Processing)->create();
+        $generation = Generation::factory()->create();
+        $generation->forceFill([
+            'submit_outcome_unknown' => true,
+            'submitted_at' => now()->subMinutes(SubmitGeneration::SLOT_WAIT_MINUTES + 1),
+        ])->save();
+        // The earlier attempt did create it: the replay needs no slot.
+        Http::fake([CREATE_URL => accepted($generation)]);
+
+        runSubmit($generation)->assertNotReleased();
+
+        expect($generation->refresh()->status)->toBe(GenerationStatus::Queued);
+    });
+
     it('submits as soon as a slot is free', function () {
         Generation::factory()->count(2)->withStatus(GenerationStatus::Processing)->create();
         Generation::factory()->withStatus(GenerationStatus::Succeeded)->create();
@@ -287,6 +302,27 @@ describe('unknown outcome (Pixelforge may have created it)', function () {
         runSubmit($generation)->assertReleased();
 
         expect($generation->refresh()->status)->toBe(GenerationStatus::Pending);
+    });
+
+    it('never rejects on later 503s once an earlier attempt had an unknown outcome', function () {
+        $generation = Generation::factory()->create();
+        Http::fakeSequence(CREATE_URL)
+            ->pushFailedConnection()   // attempt 1: maybe created
+            ->pushResponse(pixelforgeError(503, 'overloaded', retryAfter: 2))
+            ->pushResponse(pixelforgeError(503, 'overloaded', retryAfter: 2))
+            ->pushResponse(pixelforgeError(503, 'overloaded', retryAfter: 2))
+            ->pushResponse(pixelforgeError(503, 'overloaded', retryAfter: 2));
+
+        foreach (range(1, SubmitGeneration::MAX_ATTEMPTS) as $attempt) {
+            runSubmit($generation);
+        }
+
+        // A 503 only proves THAT request created nothing; attempt 1 may still exist at Pixelforge.
+        $generation->refresh();
+        expect($generation->submit_attempts)->toBe(SubmitGeneration::MAX_ATTEMPTS)
+            ->and($generation->submit_outcome_unknown)->toBeTrue()
+            ->and($generation->status)->toBe(GenerationStatus::Pending)
+            ->and($generation->charged_micro_usd)->toBeNull();
     });
 
     it('stays pending (not rejected) after the cap, for the poller to resolve', function () {

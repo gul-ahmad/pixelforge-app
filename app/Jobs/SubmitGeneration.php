@@ -26,10 +26,13 @@ use Throwable;
  *                                  count, free), and Pixelforge's 429 concurrency_limit_exceeded is the
  *                                  backstop. Wait up to SLOT_WAIT_MINUTES, then reject. Doesn't count
  *                                  towards the attempt cap.
- *  - other 429s / 503 overloaded → nothing was created: back off (≥ Retry-After), max MAX_ATTEMPTS,
+ *  - other 429s / 503 overloaded → THIS request created nothing: back off (≥ Retry-After), max MAX_ATTEMPTS,
  *                                  then reject. (A 429 always means "not created", even without a code.)
- *  - network error / other 5xx   → outcome UNKNOWN (Pixelforge may have created it): back off and retry;
- *                                  after MAX_ATTEMPTS stay pending (never reject), the poller retries later.
+ *                                  But if an EARLIER attempt had an unknown outcome, it may still exist, so
+ *                                  we never reject: we stay pending and keep replaying the key.
+ *  - network error / other 5xx   → outcome UNKNOWN (Pixelforge may have created it): flag the row
+ *                                  (submit_outcome_unknown), back off and retry; after MAX_ATTEMPTS stay
+ *                                  pending (never reject), the poller retries later.
  *  - any other 4xx (policy, validation, auth, daily limit, …) → reject now, no retry.
  */
 class SubmitGeneration implements ShouldBeUnique, ShouldQueue
@@ -95,7 +98,10 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
         // Every slot is taken by our own generations: wait without spending an API request.
         // (Repeated 429s while waiting would eat the shared 60 requests/minute and could get
         // other users' submissions rate-limited.)
-        if ($this->inFlightCount() >= $maxConcurrent) {
+        // Skipped after an unknown outcome: if Pixelforge did create it, the replay needs no slot
+        // (replays don't count against the concurrency limit), and timing out here would reject
+        // a generation that may exist. Pixelforge's own 429 answers the question instead.
+        if (! $generation->submit_outcome_unknown && $this->inFlightCount() >= $maxConcurrent) {
             $this->waitForFreeSlot($generation, self::SLOT_CHECK_SECONDS, $reject);
 
             return;
@@ -196,10 +202,24 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
             ->count();
     }
 
-    /** Rate limited or overloaded: Pixelforge guarantees nothing was created, so giving up is safe. */
+    /**
+     * Rate limited or overloaded: Pixelforge guarantees THIS request created nothing, so giving up
+     * is safe, unless an earlier attempt had an unknown outcome. That one may have created the
+     * generation, so we keep it pending and the poller keeps replaying the same key.
+     */
     private function retryOrReject(Generation $generation, PixelforgeApiException $e, RejectGeneration $reject): void
     {
         $code = $e->errorCode ?? "http_{$e->status}";
+
+        if ($generation->submit_outcome_unknown) {
+            $this->noteRetry($generation, $code, 'Pixelforge is busy, retrying…');
+
+            if ($generation->submit_attempts < self::MAX_ATTEMPTS) {
+                $this->release(max($e->retryAfterSeconds ?? 0, $this->backoffSeconds($generation)));
+            }
+
+            return;
+        }
 
         if ($generation->submit_attempts >= self::MAX_ATTEMPTS) {
             $reject->handle($generation, $code,
@@ -224,6 +244,10 @@ class SubmitGeneration implements ShouldBeUnique, ShouldQueue
             'detail' => $detail,
             'attempt' => $generation->submit_attempts,
         ]);
+
+        // Remembered for good: later 429s/503s say nothing about THIS attempt.
+        Generation::query()->whereKey($generation->id)->update(['submit_outcome_unknown' => true]);
+        $generation->submit_outcome_unknown = true;
 
         $this->noteRetry($generation, $code, 'Could not reach Pixelforge, retrying…');
 
