@@ -4,6 +4,8 @@ use App\Actions\Generations\ApplyProviderUpdate;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Services\Pixelforge\ProviderGeneration;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 
 /** Snapshot of the docs example generation, linked to $generation through metadata. */
 function snapshotFor(Generation $generation, string $state, array $overrides = []): ProviderGeneration
@@ -159,3 +161,33 @@ it('changes nothing if the usage cannot be priced (transaction rolls back)', fun
         ->and($generation->charged_micro_usd)->toBeNull()
         ->and($generation->provider_generation_id)->toBeNull();
 });
+
+/**
+ * Row-lock proof (MySQL only: SQLite has no FOR UPDATE and serialises writers instead).
+ * Removing lockForUpdate() makes this fail. And the lock must be taken by primary key only:
+ * a FOR UPDATE on the unique provider_generation_id index takes an InnoDB gap lock when no
+ * row matches yet, which deadlocks a webhook racing the create response.
+ */
+it('locks the generation row by primary key only', function (bool $linked) {
+    $generation = Generation::factory()->withStatus(GenerationStatus::Queued)->create();
+    if ($linked) {
+        $generation->forceFill(['provider_generation_id' => 'gen_01JC2Z8Q4N6V0M3H7X5T9R2B1K'])->save();
+    }
+
+    $generationLocks = [];
+    DB::listen(function (QueryExecuted $query) use (&$generationLocks) {
+        if (str_contains($query->sql, 'for update') && str_contains($query->sql, '`generations`')) {
+            $generationLocks[] = $query->sql;
+        }
+    });
+
+    apply(snapshotFor($generation, 'succeeded'));
+
+    expect($generation->refresh()->status)->toBe(GenerationStatus::Succeeded)
+        ->and($generationLocks)->toHaveCount(1)
+        ->and($generationLocks[0])->toContain('where `generations`.`id` = ?')
+        ->and($generationLocks[0])->not->toContain('provider_generation_id');
+})->with([
+    'webhook before the create response (matched by metadata)' => false,
+    'already linked (matched by provider id)' => true,
+])->skip(fn () => DB::getDriverName() !== 'mysql', 'MySQL-only: SQLite drops FOR UPDATE from the SQL.');

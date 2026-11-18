@@ -56,20 +56,21 @@ class ApplyProviderUpdate
     /**
      * Match by Pixelforge's id first; fall back to our own id in metadata, which covers a
      * webhook that arrives before the create call has returned and stored the provider id.
+     *
+     * The match is a plain read; only the primary key is locked. Locking through the unique
+     * provider_generation_id index would take an InnoDB gap lock when no row matches yet,
+     * and a webhook racing the create response would then deadlock with it on MySQL.
+     * Reading the id unlocked is safe: the locked re-read below returns the latest row, and
+     * the provider-id check after it catches any mismatch.
      */
     private function findAndLock(ProviderGeneration $snapshot): ?Generation
     {
-        $generation = Generation::query()
-            ->where('provider_generation_id', $snapshot->id)
-            ->lockForUpdate()
-            ->first();
+        $id = Generation::query()->where('provider_generation_id', $snapshot->id)->value('id')
+            ?? $snapshot->localGenerationId;
 
-        if ($generation === null && $snapshot->localGenerationId !== null) {
-            $generation = Generation::query()
-                ->whereKey($snapshot->localGenerationId)
-                ->lockForUpdate()
-                ->first();
-        }
+        $generation = $id === null
+            ? null
+            : Generation::query()->whereKey($id)->lockForUpdate()->first();
 
         if ($generation === null) {
             Log::warning('Pixelforge update for an unknown generation.', ['provider_generation_id' => $snapshot->id]);
