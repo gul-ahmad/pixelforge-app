@@ -253,6 +253,31 @@ Tests never reach the real API (`Http::preventStrayRequests()`), and fixtures ar
 - submit job: 429 with `Retry-After`, 503, concurrency waits, content policy, idempotency key reused on every retry, unknown outcomes never rejected;
 - polling repairs a generation whose webhook never arrived, and charges once.
 
+**Webhook drill (local, end to end, nothing faked).** Pest tests run inside a rolled-back
+transaction and a single process, so they can't prove what happens when real requests and
+several workers race. `pixelforge:webhook-drill` sends **real signed HTTP requests** to the
+running app, then processes the queue with **several workers in parallel**, and checks the
+final generation, webhook events, ledger and balance:
+
+```bash
+PHP_CLI_SERVER_WORKERS=8 php artisan serve --port=8011 --no-reload   # requests really overlap
+php artisan pixelforge:webhook-drill --url=http://127.0.0.1:8011 --workers=4
+```
+
+| Scenario | Expected final state |
+| --- | --- |
+| Same `succeeded` event 5× at once | 1 event row, charged $0.381888 once, 1 charge + 1 release in the ledger |
+| `succeeded`, then a late `processing` | stays succeeded, charged once |
+| `succeeded`, then `failed` | stays succeeded, charged once, no error |
+| Stale timestamp (301 s) / tampered body | 400, nothing stored, untouched, hold still in place |
+| Unknown event type with a succeeded object | 204, stored and processed, generation **not** changed |
+| Webhook before the create call returned, then the late 202 | matched via metadata, succeeded, charged once; the late `queued` is ignored |
+
+All 39 checks pass (balance = ledger sum for every user; queue drained; no failed jobs). The 5
+concurrent copies dispatch 5 jobs that 4 workers apply at the same time, so this exercises the
+row lock for real. Breaking the forward-only rule makes the drill fail. It refuses to run in
+production, and deletes its rows afterwards (`--keep` to inspect them).
+
 Beyond the test suite, I ran every keyword against the real API through the real worker and
 webhooks. That's how I found that waiting for a concurrency slot was spending the shared rate
 limit, which is now fixed.
