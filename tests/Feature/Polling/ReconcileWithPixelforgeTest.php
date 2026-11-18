@@ -8,6 +8,7 @@ use App\Models\WebhookEvent;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 const GET_URL = 'https://pixelforge.test/v1/generations/*';
@@ -200,6 +201,37 @@ describe('unprocessed webhook events', function () {
         storedEvent('evt_lost', minutesAgo: 10);
         storedEvent('evt_recent', minutesAgo: 1);
         storedEvent('evt_done', minutesAgo: 10, processed: true);
+
+        reconcile();
+
+        Queue::assertPushed(ProcessWebhookEvent::class, 1);
+        Queue::assertPushed(ProcessWebhookEvent::class, fn (ProcessWebhookEvent $job) => $job->event->provider_event_id === 'evt_lost');
+    });
+
+    it('parks an event that keeps failing, so it is not re-queued forever', function () {
+        $poison = storedEvent('evt_poison', minutesAgo: 60);
+        Log::spy();
+
+        foreach (range(1, ProcessWebhookEvent::MAX_ROUNDS) as $round) {
+            (new ProcessWebhookEvent($poison))->failed(new UnexpectedValueException('Unknown Pixelforge status [paused].'));
+        }
+
+        $poison->refresh();
+        expect($poison->process_attempts)->toBe(ProcessWebhookEvent::MAX_ROUNDS)
+            ->and($poison->failed_at)->not->toBeNull()
+            ->and($poison->processed_at)->toBeNull();
+        Log::shouldHaveReceived('critical')->once();
+
+        reconcile();
+
+        Queue::assertNotPushed(ProcessWebhookEvent::class);
+    });
+
+    it('still retries a lost event when older failed events exist (no starvation)', function () {
+        foreach (range(1, 10) as $i) {
+            storedEvent("evt_poison_{$i}", minutesAgo: 120)->forceFill(['failed_at' => now()])->save();
+        }
+        storedEvent('evt_lost', minutesAgo: 10);
 
         reconcile();
 

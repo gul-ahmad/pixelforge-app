@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Applies one stored webhook event. Runs on the queue so the webhook endpoint can answer
@@ -16,12 +17,18 @@ use Illuminate\Support\Facades\Log;
  *
  * The update and the "processed" mark are committed together: either both happen or
  * neither does (and the job, a redelivery or the poller will try again).
+ *
+ * An event that fails every try of MAX_ROUNDS rounds (a "poison" event, e.g. an unknown status)
+ * is parked with failed_at and an operator alert, instead of being re-queued forever.
  */
 class ProcessWebhookEvent implements ShouldQueue
 {
     use Queueable;
 
     public int $tries = 5;
+
+    /** Rounds of $tries (first run + poller re-queues) before the event is parked for an operator. */
+    public const int MAX_ROUNDS = 3;
 
     /** @var list<int> seconds between attempts */
     public array $backoff = [5, 30, 120, 600];
@@ -56,6 +63,27 @@ class ProcessWebhookEvent implements ShouldQueue
                 ->whereNull('processed_at')
                 ->update(['processed_at' => now()]);
         });
+    }
+
+    /** All tries of this round failed: count the round, and park the event after MAX_ROUNDS. */
+    public function failed(?Throwable $exception): void
+    {
+        WebhookEvent::query()->whereKey($this->event->id)->increment('process_attempts');
+        $event = $this->event->refresh();
+
+        if ($event->process_attempts < self::MAX_ROUNDS || $event->failed_at !== null) {
+            return;
+        }
+
+        $event->forceFill(['failed_at' => now()])->save();
+
+        Log::critical('Pixelforge webhook event keeps failing; parked for manual review.', [
+            'event_id' => $event->provider_event_id,
+            'type' => $event->type,
+            'provider_generation_id' => $event->provider_generation_id,
+            'rounds' => $event->process_attempts,
+            'exception' => $exception?->getMessage(),
+        ]);
     }
 
     private function applyGenerationEvent(WebhookEvent $event, ApplyProviderUpdate $applyUpdate): void

@@ -15,8 +15,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $provider_generation_id
  * @property int $delivery_attempt
  * @property array<string, mixed> $payload
+ * @property int $process_attempts
  * @property CarbonImmutable $received_at
  * @property CarbonImmutable|null $processed_at
+ * @property CarbonImmutable|null $failed_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -38,8 +40,10 @@ class WebhookEvent extends Model
         return [
             'payload' => 'array',
             'delivery_attempt' => 'integer',
+            'process_attempts' => 'integer',
             'received_at' => 'datetime',
             'processed_at' => 'datetime',
+            'failed_at' => 'datetime',
         ];
     }
 }
