@@ -7,6 +7,7 @@ use App\Actions\Generations\EstimateGenerationCost;
 use App\Enums\GenerationStatus;
 use App\Enums\ImageQuality;
 use App\Enums\ImageSize;
+use App\Exceptions\InsufficientCreditsException;
 use App\Exceptions\PricingUnavailableException;
 use App\Http\Requests\Generations\StoreGenerationRequest;
 use App\Http\Resources\GenerationResource;
@@ -97,6 +98,8 @@ class GenerationController extends Controller
         } catch (PricingUnavailableException $e) {
             // We never submit a paid request without having shown its price.
             throw ValidationException::withMessages(['pricing' => $e->getMessage()]);
+        } catch (InsufficientCreditsException $e) {
+            throw ValidationException::withMessages(['credits' => $e->getMessage()]);
         }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Generation submitted. You\'ll be charged the actual cost once it completes.')]);

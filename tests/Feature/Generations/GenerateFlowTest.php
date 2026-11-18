@@ -37,7 +37,7 @@ describe('generate page', function () {
     });
 
     it('shows the options and a starting estimate', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->get(route('generations.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -54,7 +54,7 @@ describe('generate page', function () {
     it('still renders when pricing is unavailable', function () {
         Http::fake([PRICING_URL => Http::failedConnection()]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->get(route('generations.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page->where('initialEstimate', null));
@@ -63,7 +63,7 @@ describe('generate page', function () {
 
 describe('submitting', function () {
     it('saves a pending generation with its estimate and queues the submission', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
 
         $this->actingAs($user)
             ->post(route('generations.store'), validInput())
@@ -82,7 +82,7 @@ describe('submitting', function () {
     });
 
     it('creates only one generation when the same form is submitted twice', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
         $input = validInput();
 
         $this->actingAs($user)->post(route('generations.store'), $input)->assertRedirect(route('generations.index'));
@@ -95,14 +95,14 @@ describe('submitting', function () {
     it('scopes form ids per user', function () {
         $input = validInput();
 
-        $this->actingAs(User::factory()->create())->post(route('generations.store'), $input);
-        $this->actingAs(User::factory()->create())->post(route('generations.store'), $input);
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())->post(route('generations.store'), $input);
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())->post(route('generations.store'), $input);
 
         expect(Generation::count())->toBe(2);
     });
 
     it('gives every generation its own idempotency key', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
 
         $this->actingAs($user)->post(route('generations.store'), validInput());
         $this->actingAs($user)->post(route('generations.store'), validInput());
@@ -113,21 +113,21 @@ describe('submitting', function () {
 
     it('estimates from Unicode characters, not bytes', function () {
         // 400 × "é" is 800 bytes but 400 characters: same estimate as 400 × "a".
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->post(route('generations.store'), validInput(['prompt' => str_repeat('é', 400)]));
 
         expect(Generation::sole()->estimated_max_micro_usd)->toBe(467_344);
     });
 
     it('ignores empty reference image rows', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->post(route('generations.store'), validInput(['reference_images' => ['', 'https://example.com/1.png', null]]));
 
         expect(Generation::sole()->reference_images)->toBe(['https://example.com/1.png']);
     });
 
     it('validates input like Pixelforge does', function (array $input, string $errorKey) {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->post(route('generations.store'), validInput($input))
             ->assertSessionHasErrors($errorKey);
 
@@ -147,7 +147,7 @@ describe('submitting', function () {
     ]);
 
     it('accepts a prompt of exactly 4000 Unicode characters', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->post(route('generations.store'), validInput(['prompt' => str_repeat('é', 4000)]))
             ->assertSessionHasNoErrors();
     });
@@ -155,7 +155,7 @@ describe('submitting', function () {
     it('refuses to submit without a price when pricing is unavailable', function () {
         Http::fake([PRICING_URL => Http::failedConnection()]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->post(route('generations.store'), validInput())
             ->assertSessionHasErrors('pricing');
 
@@ -167,7 +167,7 @@ describe('rate limits', function () {
     it('lets a user submit after typing a long prompt (live estimates have their own limit)', function () {
         // Reproduces a production bug: estimates and submits shared one throttle counter,
         // so ~10 live estimates while typing made the submit itself fail with 429.
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
 
         foreach (range(1, 30) as $characters) {
             $this->actingAs($user)
@@ -183,7 +183,7 @@ describe('rate limits', function () {
     });
 
     it('still limits submits to 10 a minute, with a friendly message instead of an error page', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
 
         foreach (range(1, 10) as $i) {
             $this->actingAs($user)->post(route('generations.store'), validInput())->assertRedirect(route('generations.index'));
@@ -199,7 +199,7 @@ describe('rate limits', function () {
     });
 
     it('limits live estimates separately, per user', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
         $query = ['characters' => 1, 'reference_images' => 0, 'size' => '1024x1024', 'quality' => 'low'];
 
         foreach (range(1, 120) as $i) {
@@ -208,13 +208,13 @@ describe('rate limits', function () {
 
         $this->actingAs($user)->getJson(route('generations.estimate', $query))->assertStatus(429);
         // Another user is unaffected.
-        $this->actingAs(User::factory()->create())->getJson(route('generations.estimate', $query))->assertOk();
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())->getJson(route('generations.estimate', $query))->assertOk();
     });
 });
 
 describe('live estimate', function () {
     it('returns the range for the chosen options', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->getJson(route('generations.estimate', ['characters' => 400, 'reference_images' => 2, 'size' => '1536x1024', 'quality' => 'high']))
             ->assertOk()
             ->assertJson([
@@ -226,7 +226,7 @@ describe('live estimate', function () {
     });
 
     it('validates its input', function () {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->getJson(route('generations.estimate', ['characters' => 5000, 'reference_images' => 9, 'size' => 'x', 'quality' => 'y']))
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['characters', 'reference_images', 'size', 'quality']);
@@ -235,7 +235,7 @@ describe('live estimate', function () {
     it('answers 503 when pricing is unavailable', function () {
         Http::fake([PRICING_URL => Http::failedConnection()]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->withBalance(10_000_000)->create())
             ->getJson(route('generations.estimate', ['characters' => 1, 'reference_images' => 0, 'size' => '1024x1024', 'quality' => 'low']))
             ->assertStatus(503);
     });
@@ -260,7 +260,7 @@ describe('pricing cache', function () {
 
 describe('history page', function () {
     it('lists only my generations, newest first, with formatted money', function () {
-        $user = User::factory()->create();
+        $user = User::factory()->withBalance(10_000_000)->create();
         Generation::factory()->for($user)->create(['prompt' => 'older', 'created_at' => now()->subMinute()]);
         Generation::factory()->for($user)->create(['prompt' => 'newer']);
         Generation::factory()->create(['prompt' => 'someone else']);

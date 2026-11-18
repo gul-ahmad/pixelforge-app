@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $email
  * @property bool $is_admin
+ * @property int $balance_micro_usd
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -40,6 +41,7 @@ class User extends Authenticatable
      */
     protected $attributes = [
         'is_admin' => false,
+        'balance_micro_usd' => 0,
     ];
 
     /**
@@ -48,6 +50,14 @@ class User extends Authenticatable
     public function generations(): HasMany
     {
         return $this->hasMany(Generation::class);
+    }
+
+    /**
+     * @return HasMany<CreditTransaction, $this>
+     */
+    public function creditTransactions(): HasMany
+    {
+        return $this->hasMany(CreditTransaction::class);
     }
 
     /**
@@ -61,6 +71,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'balance_micro_usd' => 'integer',
         ];
     }
 }

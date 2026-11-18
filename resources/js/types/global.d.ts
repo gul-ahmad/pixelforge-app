@@ -20,6 +20,8 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            /** The signed-in user's balance; null for guests. */
+            credits: { balance: string; balance_micro_usd: number } | null;
             [key: string]: unknown;
         };
     }

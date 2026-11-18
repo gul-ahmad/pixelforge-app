@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
-import { ImagePlus, Info, X } from '@lucide/vue';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { ImagePlus, Info, Wallet, X } from '@lucide/vue';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { index as creditsIndex } from '@/routes/credits';
 import { create, estimate as estimateRoute, store } from '@/routes/generations';
 import type {
     CostEstimate,
@@ -139,19 +140,35 @@ function imageError(index: number): string | undefined {
 
 /* ---------- Submit ---------- */
 
-// Form-level problems shown next to the button: pricing unavailable, or submitting too fast.
+// Form-level problems shown next to the button: pricing unavailable, not enough credits,
+// or submitting too fast.
 const formError = computed(() => {
     const errors = form.errors as Record<string, string | undefined>;
 
-    return errors.pricing ?? errors.submit;
+    return errors.pricing ?? errors.credits ?? errors.submit;
 });
+
+/* ---------- Credits ---------- */
+
+const page = usePage();
+const credits = computed(() => page.props.credits);
+
+// The maximum is held from the balance when you submit, so it must fit. (Integers only;
+// the server checks this again and is the one that decides.)
+const canAfford = computed(
+    () =>
+        estimate.value === null ||
+        credits.value === null ||
+        credits.value.balance_micro_usd >= estimate.value.max_micro_usd,
+);
 
 const canSubmit = computed(
     () =>
         !form.processing &&
         form.prompt.trim() !== '' &&
         !promptTooLong.value &&
-        estimate.value !== null,
+        estimate.value !== null &&
+        canAfford.value,
 );
 
 function submit(): void {
@@ -350,6 +367,40 @@ function submit(): void {
                             >
                         </p>
                     </div>
+
+                    <div
+                        v-if="credits"
+                        class="flex items-center justify-between gap-2 border-t pt-3 text-sm"
+                    >
+                        <span class="inline-flex items-center gap-1.5">
+                            <Wallet
+                                class="size-4 text-muted-foreground"
+                                aria-hidden="true"
+                            />
+                            Balance
+                            <strong class="tabular-nums" data-test="balance">{{
+                                credits.balance
+                            }}</strong>
+                        </span>
+                        <Link
+                            :href="creditsIndex()"
+                            class="text-xs text-primary underline-offset-4 hover:underline"
+                            >Buy credits</Link
+                        >
+                    </div>
+                    <p
+                        v-if="!canAfford && estimate"
+                        class="text-sm text-amber-700 dark:text-amber-400"
+                        role="status"
+                    >
+                        This can cost up to {{ estimate.max }}, which is held
+                        from your balance when you submit. Buy credits to
+                        continue.
+                    </p>
+                    <p v-else class="text-xs text-muted-foreground">
+                        Up to the maximum is held from your balance when you
+                        submit; anything not used is returned.
+                    </p>
 
                     <InputError :message="formError" />
 

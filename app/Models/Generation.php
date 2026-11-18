@@ -32,6 +32,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property list<string> $reference_images
  * @property int $estimated_min_micro_usd
  * @property int $estimated_max_micro_usd
+ * @property int $reserved_micro_usd
  * @property array<string, int>|null $usage
  * @property array<string, string>|null $rates
  * @property int|null $provider_cost_nano_usd
@@ -74,6 +75,7 @@ class Generation extends Model
         'status' => 'pending',
         'reference_images' => '[]',
         'submit_attempts' => 0,
+        'reserved_micro_usd' => 0,
     ];
 
     /**
@@ -90,6 +92,7 @@ class Generation extends Model
             'rates' => 'array',
             'estimated_min_micro_usd' => 'integer',
             'estimated_max_micro_usd' => 'integer',
+            'reserved_micro_usd' => 'integer',
             'provider_cost_nano_usd' => 'integer',
             'charged_micro_usd' => 'integer',
             'submit_attempts' => 'integer',

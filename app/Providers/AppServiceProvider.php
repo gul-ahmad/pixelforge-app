@@ -48,6 +48,13 @@ class AppServiceProvider extends ServiceProvider
                 'submit' => "You're submitting too quickly. Please wait a minute and try again.",
             ])));
 
+        // Fake purchases: generous but bounded.
+        RateLimiter::for('credit-purchases', fn (Request $request) => Limit::perMinute(10)
+            ->by('credits:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+            ->response(fn () => back()->withErrors([
+                'pack_micro_usd' => 'Too many purchases in a minute. Please wait a moment.',
+            ])));
+
         // The live estimate fires while typing; cheap (cached pricing, no Pixelforge call).
         RateLimiter::for('generation-estimates', fn (Request $request) => Limit::perMinute(120)
             ->by('estimate:'.($request->user()?->getAuthIdentifier() ?? $request->ip())));

@@ -6,6 +6,7 @@ import {
     FolderGit2,
     History,
     Sparkles,
+    Wallet,
 } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogo from '@/components/AppLogo.vue';
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { report as adminReport } from '@/routes/admin';
+import { index as creditsIndex } from '@/routes/credits';
 import { create as generate, index as history } from '@/routes/generations';
 import type { NavItem } from '@/types';
 
@@ -38,6 +40,11 @@ const userNavItems: NavItem[] = [
         title: 'History',
         href: history(),
         icon: History,
+    },
+    {
+        title: 'Credits',
+        href: creditsIndex(),
+        icon: Wallet,
     },
 ];
 

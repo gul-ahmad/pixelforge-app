@@ -34,6 +34,14 @@ class UserFactory extends Factory
     }
 
     /**
+     * A user who already has credits (sets the running balance directly; for tests).
+     */
+    public function withBalance(int $microUsd): static
+    {
+        return $this->state(fn (array $attributes) => ['balance_micro_usd' => $microUsd]);
+    }
+
+    /**
      * Indicate that the model's email address should be unverified.
      */
     public function unverified(): static

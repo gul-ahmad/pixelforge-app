@@ -2,6 +2,7 @@
 
 namespace App\Actions\Generations;
 
+use App\Actions\Credits\SettleGenerationCredits;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use Illuminate\Support\Facades\DB;
@@ -12,9 +13,12 @@ use Illuminate\Support\Facades\DB;
  *
  * Uses the same lock and the same transition rule as ApplyProviderUpdate, so a rejection
  * can never overwrite a generation Pixelforge has meanwhile accepted.
+ * The hold placed on the user's balance is given back in the same transaction.
  */
 class RejectGeneration
 {
+    public function __construct(private readonly SettleGenerationCredits $settleCredits) {}
+
     public function handle(Generation $generation, string $errorCode, string $message): Generation
     {
         return DB::transaction(function () use ($generation, $errorCode, $message) {
@@ -30,7 +34,10 @@ class RejectGeneration
                 'error_message' => $message,
                 'provider_cost_nano_usd' => 0,
                 'charged_micro_usd' => 0,
-            ])->save();
+            ]);
+
+            $this->settleCredits->release($locked);
+            $locked->save();
 
             return $locked;
         });

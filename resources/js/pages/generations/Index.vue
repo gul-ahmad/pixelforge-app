@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { Head, Link, usePoll } from '@inertiajs/vue3';
+import { Head, Link, usePage, usePoll } from '@inertiajs/vue3';
 import { RefreshCw, Sparkles } from '@lucide/vue';
 import { computed, watch } from 'vue';
 import GenerationCard from '@/components/generations/GenerationCard.vue';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
+import { index as creditsIndex } from '@/routes/credits';
 import { create, index } from '@/routes/generations';
 import type {
     Generation,
@@ -28,13 +29,15 @@ defineOptions({
  * data every 3 seconds (a partial reload of just these two props, no full page load).
  * When everything is finished, stop, so an idle tab costs nothing.
  */
+const page = usePage();
+
 const hasActive = computed(() =>
     props.generations.data.some((generation) => !generation.is_terminal),
 );
 
 const { start, stop } = usePoll(
     3000,
-    { only: ['generations', 'summary'] },
+    { only: ['generations', 'summary', 'credits'] },
     { autoStart: false },
 );
 
@@ -64,6 +67,17 @@ watch(hasActive, (active) => (active ? start() : stop()), { immediate: true });
                 <strong class="tabular-nums" data-test="total-charged">{{
                     summary.total_charged
                 }}</strong>
+            </span>
+            <span v-if="page.props.credits">
+                <span class="mr-1 text-muted-foreground">Balance:</span>
+                <strong class="tabular-nums">{{
+                    page.props.credits.balance
+                }}</strong>
+                <Link
+                    :href="creditsIndex()"
+                    class="ml-2 text-xs text-primary underline-offset-4 hover:underline"
+                    >Buy credits</Link
+                >
             </span>
             <span class="text-muted-foreground">
                 {{ summary.succeeded }} succeeded of

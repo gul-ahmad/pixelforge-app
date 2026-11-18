@@ -2,6 +2,7 @@
 
 namespace App\Actions\Generations;
 
+use App\Actions\Credits\SettleGenerationCredits;
 use App\Enums\GenerationStatus;
 use App\Models\Generation;
 use App\Services\Pixelforge\ProviderGeneration;
@@ -20,9 +21,13 @@ use Illuminate\Support\Facades\Log;
  *    inside a transaction holding a row lock, so two concurrent updates (say a webhook
  *    and a poll) cannot both charge.
  *  - Failed generations cost 0.
+ *  - The user's balance moves in the same transaction: on success the hold is released and
+ *    the actual charge taken; on failure the hold is released.
  */
 class ApplyProviderUpdate
 {
+    public function __construct(private readonly SettleGenerationCredits $settleCredits) {}
+
     /**
      * @return Generation|null null when the snapshot matches none of our generations
      */
@@ -117,6 +122,8 @@ class ApplyProviderUpdate
         $generation->image_url = $snapshot->imageUrl;
         $generation->image_url_expires_at = $snapshot->imageUrlExpiresAt;
         $generation->completed_at = $snapshot->completedAt ?? now();
+
+        $this->settleCredits->charge($generation);
     }
 
     /** Failed generations are never billed by Pixelforge, so they cost the user nothing. */
@@ -127,5 +134,7 @@ class ApplyProviderUpdate
         $generation->error_code = $snapshot->errorCode ?? 'generation_failed';
         $generation->error_message = $snapshot->errorMessage;
         $generation->completed_at = $snapshot->completedAt ?? now();
+
+        $this->settleCredits->release($generation);
     }
 }

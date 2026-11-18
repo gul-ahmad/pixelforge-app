@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Pricing;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -40,6 +41,12 @@ class HandleInertiaRequests extends Middleware
             'name' => config('app.name'),
             'auth' => [
                 'user' => $request->user(),
+            ],
+            // Pre-formatted for the UI (no money maths in JavaScript); the integer is only used
+            // to compare with an estimate's integer maximum on the generate form.
+            'credits' => fn () => $request->user() === null ? null : [
+                'balance' => Pricing::formatMicroUsd($request->user()->balance_micro_usd),
+                'balance_micro_usd' => $request->user()->balance_micro_usd,
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
