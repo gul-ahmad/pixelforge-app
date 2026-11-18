@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Builds or updates the app on the office server. Run as the app user, never as root:
+# Builds or updates the app on the server. Run as the app user, never as root:
 #
-#   sudo -u your-app-user -H bash /var/www/your-app/pixelforge/deploy/deploy.sh
+#   sudo -u your-app-user -H bash /var/www/your-app/deploy/deploy.sh
 #
 # Safe to run again for every update.
 set -euo pipefail
 
-APP_DIR=/var/www/your-app/pixelforge
+# The app folder is the parent of this script's folder, so nothing server-specific is hard-coded.
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PHP=/usr/bin/php8.4                 # the server's default "php" is 8.2; this app needs 8.4
 COMPOSER=/usr/local/bin/composer
 

@@ -4,7 +4,7 @@ A Laravel 13 + Vue 3 + Inertia app where signed-in users generate images through
 **Pixelforge**, an asynchronous, per-token-priced image API, and are charged
 **exactly** what each image cost plus a 25% markup. Failed generations are free.
 
-- **Live app:** http://YOUR_SERVER_IP:8200 (the server's basic-auth login and a demo account are in the submission form)
+- **Live app:** the URL, the server's basic-auth login and a demo account are in the submission form
 - **Stack:** Laravel 13, PHP 8.4, Vue 3 `<script setup>` + TypeScript, Inertia 3, Tailwind 4, Pest, `brick/math`
 - **Quality gates (CI on every push):** 327 Pest tests on **MySQL and SQLite**, PHPStan level 7, Pint, vue-tsc, Vite+ lint/format
 

@@ -1,7 +1,8 @@
-# Deploying to the office server
+# Deploying to a shared Ubuntu server
 
-Target: `http://YOUR_SERVER_IP:8200` on the shared Ubuntu 24.04 server, following the server
-admin's rules. Other apps on this server must not be affected.
+Target: `http://YOUR_SERVER_IP:8200` on a shared Ubuntu 24.04 server, following the server
+admin's rules. Placeholders: `YOUR_SERVER_IP`, `YOUR_SSH_USER`, the app's Linux user `your-app-user`,
+the app folder `/var/www/your-app`, and `your-app` for the nginx site / PHP-FPM pool names. Other apps on this server must not be affected.
 
 | Choice                                                          | Why                                                                                                                                                                                                                        |
 | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -45,18 +46,18 @@ sudo mv /etc/php/8.4/fpm/pool.d/www.conf /etc/php/8.4/fpm/pool.d/www.conf.disabl
 
 ```bash
 id your-app-user || sudo useradd --create-home --shell /usr/sbin/nologin your-app-user
-sudo mkdir -p /var/www/your-app/pixelforge
-sudo chown your-app-user:your-app-user /var/www/your-app/pixelforge
-sudo chmod 750 /var/www/your-app/pixelforge
-sudo -u your-app-user -H git clone https://github.com/gul-ahmad/pixelforge-app.git /var/www/your-app/pixelforge
+sudo mkdir -p /var/www/your-app
+sudo chown your-app-user:your-app-user /var/www/your-app
+sudo chmod 750 /var/www/your-app
+sudo -u your-app-user -H git clone https://github.com/gul-ahmad/pixelforge-app.git /var/www/your-app
 ```
 
-Expected: `Cloning into '/var/www/your-app/pixelforge'... done.`
+Expected: `Cloning into '/var/www/your-app'... done.`
 
 ## 3. Production `.env`
 
 ```bash
-cd /var/www/your-app/pixelforge
+cd /var/www/your-app
 sudo -u your-app-user cp deploy/env.production.example .env
 sudo -u your-app-user chmod 600 .env
 sudo -u your-app-user nano .env
@@ -73,7 +74,7 @@ PIXELFORGE_WEBHOOK_SECRET=whsec_...
 ## 4. Build the app
 
 ```bash
-sudo -u your-app-user -H bash /var/www/your-app/pixelforge/deploy/deploy.sh
+sudo -u your-app-user -H bash /var/www/your-app/deploy/deploy.sh
 ```
 
 Expected: it ends with `==> Done` (composer, npm build, migrations, caches).
@@ -81,17 +82,17 @@ Expected: it ends with `==> Done` (composer, npm build, migrations, caches).
 ## 5. Let Nginx read only `public/`
 
 ```bash
-sudo setfacl -m u:www-data:x /var/www/your-app/pixelforge
-sudo setfacl -R -m u:www-data:rX /var/www/your-app/pixelforge/public
-sudo setfacl -R -d -m u:www-data:rX /var/www/your-app/pixelforge/public   # also for files created by later builds
+sudo setfacl -m u:www-data:x /var/www/your-app
+sudo setfacl -R -m u:www-data:rX /var/www/your-app/public
+sudo setfacl -R -d -m u:www-data:rX /var/www/your-app/public   # also for files created by later builds
 ```
 
 ## 6. PHP-FPM pool (PHP 8.4 only)
 
 ```bash
-sudo cp /var/www/your-app/pixelforge/deploy/php-fpm/your-app-user.conf /etc/php/8.4/fpm/pool.d/your-app-user.conf
+sudo cp /var/www/your-app/deploy/php-fpm/your-app.conf /etc/php/8.4/fpm/pool.d/your-app.conf
 sudo php-fpm8.4 -t && sudo systemctl reload php8.4-fpm
-ls -l /run/php/your-app-user.sock
+ls -l /run/php/your-app.sock
 ```
 
 Expected: `test is successful`, and the socket file exists. Never touch `php8.2-fpm`.
@@ -99,18 +100,18 @@ Expected: `test is successful`, and the socket file exists. Never touch `php8.2-
 ## 7. Nginx site on port 8200
 
 ```bash
-sudo cp /var/www/your-app/pixelforge/deploy/nginx/your-app-user.conf /etc/nginx/sites-available/your-app-user
-sudo ln -s /etc/nginx/sites-available/your-app-user /etc/nginx/sites-enabled/
+sudo cp /var/www/your-app/deploy/nginx/your-app.conf /etc/nginx/sites-available/your-app
+sudo ln -s /etc/nginx/sites-available/your-app /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Expected: `syntax is ok` / `test is successful`. **If `nginx -t` fails**, remove only our link
-(`sudo rm /etc/nginx/sites-enabled/your-app-user`), run `sudo nginx -t` again, and send me the error.
+(`sudo rm /etc/nginx/sites-enabled/your-app`), run `sudo nginx -t` again, and send me the error.
 
 ## 8. Basic-auth password for reviewers
 
 ```bash
-sudo htpasswd -c /etc/nginx/your-app-user.htpasswd client
+sudo htpasswd -c /etc/nginx/your-app.htpasswd client
 ```
 
 ## 9. Open port 8200 (only ADD a rule)
@@ -123,7 +124,7 @@ sudo ufw status numbered
 ## 10. Scheduler and queue worker (cron)
 
 ```bash
-sudo crontab -u your-app-user /var/www/your-app/pixelforge/deploy/crontab.txt
+sudo crontab -u your-app-user /var/www/your-app/deploy/crontab.txt
 sudo crontab -u your-app-user -l
 ```
 
@@ -138,8 +139,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST http://127.0.0.1:8200/webhooks/
 The third must be **400**, not 401: that proves webhooks bypass basic auth and reach the app,
 which rejects unsigned requests.
 
-Then the admin's final checks: **http://YOUR_SERVER_IP:8100** and **http://YOUR_SERVER_IP:8101/login**
-must still open, and `php -v` must still say 8.2.
+Then check that the server's other sites still open as before, and `php -v` still says 8.2.
 
 ## 12. Connect Pixelforge (production key)
 
@@ -147,16 +147,16 @@ In the Pixelforge dashboard, on the **production** key, set the webhook URL to
 `http://YOUR_SERVER_IP:8200/webhooks/pixelforge` and press **Send test event**. Then on the server:
 
 ```bash
-sudo -u your-app-user php8.4 /var/www/your-app/pixelforge/artisan tinker --execute='echo App\Models\WebhookEvent::latest("id")->value("type");'
+sudo -u your-app-user php8.4 /var/www/your-app/artisan tinker --execute='echo App\Models\WebhookEvent::latest("id")->value("type");'
 ```
 
 Expected: `ping`.
 
 ## 13. Test from outside
 
-On a phone using **mobile data** (not office Wi-Fi), open `http://YOUR_SERVER_IP:8200`: it should ask
-for the password, then show the app. If it doesn't open from outside, the university network may
-block 8200. **Stop and report**; don't try other ports.
+On a phone using **mobile data** (not the same network as the server), open `http://YOUR_SERVER_IP:8200`:
+it should ask for the password, then show the app. If it doesn't open from outside, a network
+firewall may block the port. **Stop and ask the server admin**; don't try other ports.
 
 ---
 
@@ -165,7 +165,7 @@ block 8200. **Stop and report**; don't try other ports.
 Register the account first on the site, then grant it:
 
 ```bash
-sudo -u your-app-user php8.4 /var/www/your-app/pixelforge/artisan users:make-admin you@example.com
+sudo -u your-app-user php8.4 /var/www/your-app/artisan users:make-admin you@example.com
 ```
 
 The **Admin report** link then appears in the sidebar (`/admin/report`).
@@ -173,7 +173,7 @@ The **Admin report** link then appears in the sidebar (`/admin/report`).
 ## Updating later
 
 ```bash
-sudo -u your-app-user -H bash /var/www/your-app/pixelforge/deploy/deploy.sh
+sudo -u your-app-user -H bash /var/www/your-app/deploy/deploy.sh
 ```
 
 ## Where to look when something breaks
@@ -181,21 +181,21 @@ sudo -u your-app-user -H bash /var/www/your-app/pixelforge/deploy/deploy.sh
 - **Build fails with `Could not load …/resources/js/routes/<name>`:** a stale route cache from an
   older deploy hid new routes from Wayfinder. `deploy.sh` now clears it before building; on a
   server still running an older `deploy.sh`, run
-  `sudo -u your-app-user php8.4 /var/www/your-app/pixelforge/artisan route:clear` once, then deploy again.
+  `sudo -u your-app-user php8.4 /var/www/your-app/artisan route:clear` once, then deploy again.
 
-- `/var/log/nginx/your-app-user.error.log`
-- `/var/www/your-app/pixelforge/storage/logs/laravel-YYYY-MM-DD.log`
-- `/var/www/your-app/pixelforge/storage/logs/worker.log`
+- `/var/log/nginx/your-app.error.log`
+- `/var/www/your-app/storage/logs/laravel-YYYY-MM-DD.log`
+- `/var/www/your-app/storage/logs/worker.log`
 
 ## Removing everything afterwards
 
 ```bash
 sudo crontab -u your-app-user -r
-sudo rm /etc/nginx/sites-enabled/your-app-user /etc/nginx/sites-available/your-app-user /etc/nginx/your-app-user.htpasswd
+sudo rm /etc/nginx/sites-enabled/your-app /etc/nginx/sites-available/your-app /etc/nginx/your-app.htpasswd
 sudo nginx -t && sudo systemctl reload nginx
-sudo rm /etc/php/8.4/fpm/pool.d/your-app-user.conf
+sudo rm /etc/php/8.4/fpm/pool.d/your-app.conf
 sudo ufw delete allow 8200/tcp
-sudo rm -rf /var/www/your-app/pixelforge
+sudo rm -rf /var/www/your-app
 sudo userdel -r your-app-user
 # PHP 8.4, as the admin described (check the autoremove dry run list first):
 sudo apt-get purge 'php8.4*' && sudo apt-get autoremove --purge -s
