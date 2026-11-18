@@ -6,7 +6,7 @@ A Laravel 13 + Vue 3 + Inertia app where signed-in users generate images through
 
 - **Live app:** http://YOUR_SERVER_IP:8200 (the server's basic-auth login and a demo account are in the submission form)
 - **Stack:** Laravel 13, PHP 8.4, Vue 3 `<script setup>` + TypeScript, Inertia 3, Tailwind 4, Pest, `brick/math`
-- **Quality gates (CI on every push):** 260 Pest tests on **MySQL and SQLite**, PHPStan level 7, Pint, vue-tsc, Vite+ lint/format
+- **Quality gates (CI on every push):** 327 Pest tests on **MySQL and SQLite**, PHPStan level 7, Pint, vue-tsc, Vite+ lint/format
 
 ---
 
@@ -21,11 +21,13 @@ A Laravel 13 + Vue 3 + Inertia app where signed-in users generate images through
 7. [Webhooks](#webhooks)
 8. [Polling fallback](#polling-fallback)
 9. [Admin report (stretch goal)](#admin-report-stretch-goal)
-10. [Running it locally](#running-it-locally)
-11. [Tests](#tests)
-12. [Deployment](#deployment)
-13. [Trade-offs and decisions](#trade-offs-and-decisions)
-14. [What I'd do next](#what-id-do-next)
+10. [Credit balances (stretch goal)](#credit-balances-stretch-goal)
+11. [Security](#security)
+12. [Running it locally](#running-it-locally)
+13. [Tests](#tests)
+14. [Deployment](#deployment)
+15. [Trade-offs and decisions](#trade-offs-and-decisions)
+16. [What I'd do next](#what-id-do-next)
 
 ---
 
@@ -179,6 +181,36 @@ charged, what Pixelforge charged us, and the profit, and checks every day agains
 - **Access.** An `is_admin` flag that isn't mass-assignable, granted only with `php artisan users:make-admin you@example.com`. A Gate (`view-admin-report`) is checked by both the route middleware and the Form Request. Code asks for the _ability_, not the role, so switching to a roles package later is a one-line change.
 - **Verified live:** for the local key, 18 generations and **$0.247690000** matched Pixelforge to the nano-dollar, including every token count.
 
+## Credit balances (stretch goal)
+
+Users pay for generations from a credit balance. **Buy credits** adds a fixed pack
+($1 / $5 / $10 / $20) as a demo purchase: no payment is taken.
+
+| Moment            | Ledger entries                   | Effect                                                                  |
+| ----------------- | -------------------------------- | ----------------------------------------------------------------------- |
+| Buy credits       | `purchase +pack`                 | Balance goes up                                                         |
+| Submit            | `hold −max estimate`             | Refused with a clear message if the balance can't cover the **maximum** |
+| Succeeded         | `release +max`, `charge −actual` | The user pays exactly the actual charge                                 |
+| Failed / rejected | `release +max`                   | Free; the balance is back where it was                                  |
+
+- **Append-only ledger** (`credit_transactions`): every change is a new row, and rows can't be updated or deleted (refused in code). `users.balance_micro_usd` is the running total, written in the **same transaction** as the ledger row with the user's row locked, so the balance always equals the sum of the ledger (tested).
+- **Never twice:** a unique index on `(generation_id, type)` allows one hold, one release and one charge per generation. Settlement runs inside the same locked, forward-only transitions that write the charge. Double-submitting a form holds once; double-clicking "Buy credits" buys once (a per-form id).
+- **Concurrency:** submitting locks the user row while checking the balance and placing the hold, so two tabs can't spend the same credit.
+- **Edge cases:** if a generation we had given up on turns out to have succeeded at Pixelforge, it is charged (its hold was already released). If Pixelforge raised its rates within the 1-hour pricing cache, the actual charge can exceed the hold. Both are correct but can take a balance slightly below what was expected, or below zero.
+- **Verified live:** buy $1, then a `[succeed]` and a `[fail]` generation → balance $1.00 − $0.017319 = **$0.982681**, matching the sum of the ledger.
+
+## Security
+
+- **Authentication and authorization:** every page except the landing page and auth screens requires sign-in. Users only ever see their own generations and ledger (queries go through `$request->user()`). The admin report needs the `view-admin-report` ability.
+- **Mass assignment:** `is_admin`, `balance_micro_usd`, status, provider ids and all money columns are not fillable (tested through the signup and profile forms).
+- **Webhooks:** HMAC signature over the raw body, constant-time comparison, a 300-second replay window, event-id deduplication, and ids taken only from the signed body.
+- **XSS:** Vue escapes all output (no `v-html`). Provider image URLs must be `https://`, so a tampered response can't inject a `javascript:` link.
+- **Headers:** `X-Frame-Options: DENY` (stops clickjacking on Buy credits / Generate), `nosniff`, strict `Referrer-Policy`, minimal `Permissions-Policy`.
+- **Rate limits:** named per-purpose limiters for submits (10/min), estimates (120/min) and purchases (10/min); Fortify limits logins.
+- **Secrets:** only in `.env` (`chmod 600` on the server); none in git history (scanned).
+- **Dependencies:** `composer audit` is clean. `npm audit` reports a ReDoS in `picomatch`, which is only used by build tools (Vite, vue-tsc) on our own file paths and never shipped to browsers; there's no patched version yet.
+- **Known limitation:** because credits are free (demo purchase), they don't stop someone with many accounts from using our Pixelforge daily quota. On the live server the site sits behind basic auth; with real payments the balance itself would prevent it.
+
 ## Running it locally
 
 Requirements: PHP 8.4, Composer, Node 22, MySQL 8 (or SQLite).
@@ -245,7 +277,7 @@ the server admin's rules. Everything is in [`deploy/`](deploy/), with a step-by-
 
 ## What I'd do next
 
-1. **Credit balances:** an append-only ledger, reserve the _maximum_ estimate on submit, settle to the actual charge on success, release on failure, and block generation when a user can't afford the maximum.
+1. **Real payments** (Stripe Checkout) behind "Buy credits", writing the same `purchase` ledger rows from a verified payment webhook.
 2. **Store images** in object storage on success, so history never expires.
 3. **Broadcast status changes** (Laravel Reverb) instead of browser polling once there are many concurrent users.
 4. **Alerting** on stuck pending generations, unprocessed webhook events and critical log entries.
