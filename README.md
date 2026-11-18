@@ -163,8 +163,11 @@ Webhook delivery isn't guaranteed, so `pixelforge:reconcile` runs every minute
 (`withoutOverlapping`, `onOneServer`):
 
 - generations queued or processing with no update for 2 minutes → `GET /v1/generations/{id}` → `ApplyProviderUpdate` (at most 10 per run, oldest first; stops on 429, 5xx or a network error);
-- stuck `pending` submissions → re-queued with the same key; after an hour → rejected (never billed);
-- webhook events stored but never processed → re-queued.
+- stuck `pending` submissions → re-queued with the same key; after an hour → rejected (never billed),
+  **unless** an earlier attempt had an unknown outcome (timeout or unexpected 5xx). Pixelforge may have
+  created that one, so it is never rejected: we keep replaying the key (keys never expire) until it answers;
+- webhook events stored but never processed → re-queued; an event that fails 3 full rounds is parked
+  (`failed_at`, critical log) so it can't block retries of other events.
 
 The History page's live updates are separate. The **browser** polls **our** server every
 3 seconds (Inertia partial reload) only while something on the page is unfinished, and never
