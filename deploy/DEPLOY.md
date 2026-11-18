@@ -178,6 +178,11 @@ sudo -u your-app-user -H bash /var/www/your-app/pixelforge/deploy/deploy.sh
 
 ## Where to look when something breaks
 
+- **Build fails with `Could not load …/resources/js/routes/<name>`:** a stale route cache from an
+  older deploy hid new routes from Wayfinder. `deploy.sh` now clears it before building; on a
+  server still running an older `deploy.sh`, run
+  `sudo -u your-app-user php8.4 /var/www/your-app/pixelforge/artisan route:clear` once, then deploy again.
+
 - `/var/log/nginx/your-app-user.error.log`
 - `/var/www/your-app/pixelforge/storage/logs/laravel-YYYY-MM-DD.log`
 - `/var/www/your-app/pixelforge/storage/logs/worker.log`

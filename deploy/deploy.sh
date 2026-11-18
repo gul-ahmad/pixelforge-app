@@ -29,6 +29,14 @@ git pull --ff-only
 echo "==> PHP dependencies"
 "$PHP" "$COMPOSER" install --no-dev --optimize-autoloader --no-interaction
 
+echo "==> Clear the previous deploy's config and route caches"
+# The build's Wayfinder step reads the route list, and a route cache from the last deploy
+# would hide new routes (the build then fails on missing @/routes/... files). Only these two
+# caches: "optimize:clear" would also empty the app cache (queue restart signal, rate limits,
+# job uniqueness locks). Both are rebuilt in the "Caches" step below.
+"$PHP" artisan config:clear
+"$PHP" artisan route:clear
+
 echo "==> Frontend build"
 npm ci --no-audit --no-fund
 npm run build
