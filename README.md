@@ -264,13 +264,13 @@ PHP_CLI_SERVER_WORKERS=8 php artisan serve --port=8011 --no-reload   # requests 
 php artisan pixelforge:webhook-drill --url=http://127.0.0.1:8011 --workers=4
 ```
 
-| Scenario | Expected final state |
-| --- | --- |
-| Same `succeeded` event 5× at once | 1 event row, charged $0.381888 once, 1 charge + 1 release in the ledger |
-| `succeeded`, then a late `processing` | stays succeeded, charged once |
-| `succeeded`, then `failed` | stays succeeded, charged once, no error |
-| Stale timestamp (301 s) / tampered body | 400, nothing stored, untouched, hold still in place |
-| Unknown event type with a succeeded object | 204, stored and processed, generation **not** changed |
+| Scenario                                                   | Expected final state                                                        |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Same `succeeded` event 5× at once                          | 1 event row, charged $0.381888 once, 1 charge + 1 release in the ledger     |
+| `succeeded`, then a late `processing`                      | stays succeeded, charged once                                               |
+| `succeeded`, then `failed`                                 | stays succeeded, charged once, no error                                     |
+| Stale timestamp (301 s) / tampered body                    | 400, nothing stored, untouched, hold still in place                         |
+| Unknown event type with a succeeded object                 | 204, stored and processed, generation **not** changed                       |
 | Webhook before the create call returned, then the late 202 | matched via metadata, succeeded, charged once; the late `queued` is ignored |
 
 All 39 checks pass (balance = ledger sum for every user; queue drained; no failed jobs). The 5
