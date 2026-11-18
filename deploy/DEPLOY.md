@@ -160,6 +160,16 @@ block 8200. **Stop and report**; don't try other ports.
 
 ---
 
+## 14. Admin access (operator report)
+
+Register the account first on the site, then grant it:
+
+```bash
+sudo -u your-app-user php8.4 /var/www/your-app/pixelforge/artisan users:make-admin you@example.com
+```
+
+The **Admin report** link then appears in the sidebar (`/admin/report`).
+
 ## Updating later
 
 ```bash

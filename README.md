@@ -20,11 +20,12 @@ A Laravel 13 + Vue 3 + Inertia app where signed-in users generate images through
 6. [Talking to Pixelforge: retries and limits](#talking-to-pixelforge-retries-and-limits)
 7. [Webhooks](#webhooks)
 8. [Polling fallback](#polling-fallback)
-9. [Running it locally](#running-it-locally)
-10. [Tests](#tests)
-11. [Deployment](#deployment)
-12. [Trade-offs and decisions](#trade-offs-and-decisions)
-13. [What I'd do next](#what-id-do-next)
+9. [Admin report (stretch goal)](#admin-report-stretch-goal)
+10. [Running it locally](#running-it-locally)
+11. [Tests](#tests)
+12. [Deployment](#deployment)
+13. [Trade-offs and decisions](#trade-offs-and-decisions)
+14. [What I'd do next](#what-id-do-next)
 
 ---
 
@@ -167,6 +168,17 @@ The History page's live updates are separate. The **browser** polls **our** serv
 3 seconds (Inertia partial reload) only while something on the page is unfinished, and never
 contacts Pixelforge.
 
+## Admin report (stretch goal)
+
+`/admin/report` is for operators only. It shows **per UTC day and per user**: what users were
+charged, what Pixelforge charged us, and the profit, and checks every day against
+**`GET /v1/usage`**.
+
+- **Same days as Pixelforge.** A generation is counted on the UTC day it **completed**, which is the day Pixelforge bills it. Only succeeded generations count; failed and rejected ones are never billed.
+- **Exact.** Sums are integers; profit = charge − cost in nano-dollars. Pixelforge's `cost_usd` is parsed to nano-dollars, so a day either matches exactly or shows the exact difference. If Pixelforge's report is unreachable, our own numbers are still shown.
+- **Access.** An `is_admin` flag that isn't mass-assignable, granted only with `php artisan users:make-admin you@example.com`. A Gate (`view-admin-report`) is checked by both the route middleware and the Form Request. Code asks for the _ability_, not the role, so switching to a roles package later is a one-line change.
+- **Verified live:** for the local key, 18 generations and **$0.247690000** matched Pixelforge to the nano-dollar, including every token count.
+
 ## Running it locally
 
 Requirements: PHP 8.4, Composer, Node 22, MySQL 8 (or SQLite).
@@ -234,7 +246,6 @@ the server admin's rules. Everything is in [`deploy/`](deploy/), with a step-by-
 ## What I'd do next
 
 1. **Credit balances:** an append-only ledger, reserve the _maximum_ estimate on submit, settle to the actual charge on success, release on failure, and block generation when a user can't afford the maximum.
-2. **Operator report:** daily and per-user charges, provider cost and profit, reconciled against `GET /v1/usage`. Provider cost is grouped by the UTC day a generation **completed**, which is how Pixelforge bills.
-3. **Store images** in object storage on success, so history never expires.
-4. **Broadcast status changes** (Laravel Reverb) instead of browser polling once there are many concurrent users.
-5. **Alerting** on stuck pending generations, unprocessed webhook events and critical log entries.
+2. **Store images** in object storage on success, so history never expires.
+3. **Broadcast status changes** (Laravel Reverb) instead of browser polling once there are many concurrent users.
+4. **Alerting** on stuck pending generations, unprocessed webhook events and critical log entries.
