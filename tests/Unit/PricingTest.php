@@ -218,6 +218,31 @@ describe('formatting', function () {
     ]);
 });
 
+describe('reconciliation helpers', function () {
+    it("reads Pixelforge's cost_usd exactly", function (string $usd, int $nano) {
+        expect(Pricing::usdStringToNano($usd))->toBe($nano);
+    })->with([
+        ['0.247690000', 247_690_000],
+        ['0.000000001', 1],
+        ['12.5', 12_500_000_000],
+        ['0', 0],
+    ]);
+
+    it('refuses to round a cost finer than a nano-dollar', function () {
+        Pricing::usdStringToNano('0.0000000001');
+    })->throws(RoundingNecessaryException::class);
+
+    it('refuses anything that is not a plain decimal', function () {
+        Pricing::usdStringToNano('1e-3');
+    })->throws(InvalidArgumentException::class);
+
+    it('formats nano-USD with a symbol and sign', function () {
+        expect(Pricing::formatNanoUsdWithSymbol(82_406_500))->toBe('$0.082406500')
+            ->and(Pricing::formatNanoUsdWithSymbol(-11_522_500))->toBe('-$0.011522500')
+            ->and(Pricing::microToNano(15_738))->toBe(15_738_000);
+    });
+});
+
 describe('pricing sheet', function () {
     it('parses the real GET /v1/pricing response', function () {
         $sheet = sheet();

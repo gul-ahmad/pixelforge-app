@@ -67,6 +67,26 @@ class PixelforgeClient
     }
 
     /**
+     * GET /v1/usage: what Pixelforge billed THIS API key per UTC day (by completion day).
+     * At most 92 days per request.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws PixelforgeApiException
+     * @throws ConnectionException
+     */
+    public function usage(string $startDate, string $endDate): array
+    {
+        $response = $this->request()->get('usage', ['start_date' => $startDate, 'end_date' => $endDate]);
+
+        if (! $response->successful()) {
+            throw PixelforgeApiException::fromResponse($response);
+        }
+
+        return (array) $response->json();
+    }
+
+    /**
      * GET /v1/pricing (no authentication needed).
      *
      * @return array<string, mixed>

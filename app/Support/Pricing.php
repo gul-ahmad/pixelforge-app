@@ -75,7 +75,7 @@ final class Pricing
      * A plain non-negative decimal string such as "5.00" or "12.5".
      * Stricter than is_numeric(): no floats, signs, exponents or whitespace in money input.
      *
-     * @phpstan-assert-if-true string $value
+     * @phpstan-assert-if-true numeric-string $value
      */
     public static function isDecimalString(mixed $value): bool
     {
@@ -189,5 +189,32 @@ final class Pricing
     public static function formatNanoUsd(int $nanoUsd): string
     {
         return (string) BigDecimal::ofUnscaledValue($nanoUsd, 9);
+    }
+
+    /** "$0.012590000" (9 decimals, like Pixelforge's usage report); negatives as "-$…". */
+    public static function formatNanoUsdWithSymbol(int $nanoUsd): string
+    {
+        $sign = $nanoUsd < 0 ? '-' : '';
+
+        return $sign.'$'.self::formatNanoUsd(abs($nanoUsd));
+    }
+
+    /**
+     * Pixelforge's "cost_usd" (an exact decimal string, e.g. "0.247690000") as nano-USD.
+     * Throws rather than rounding if it ever had more than 9 decimals.
+     */
+    public static function usdStringToNano(string $usd): int
+    {
+        if (! self::isDecimalString($usd)) {
+            throw new InvalidArgumentException("Not a decimal USD amount: [{$usd}].");
+        }
+
+        return BigDecimal::of($usd)->multipliedBy(1_000_000_000)->toScale(0, RoundingMode::Unnecessary)->toInt();
+    }
+
+    /** Micro-USD (what users are charged) in nano-USD, so it can be compared with provider costs. */
+    public static function microToNano(int $microUsd): int
+    {
+        return $microUsd * self::NANO_PER_MICRO;
     }
 }

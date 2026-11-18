@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\SpendReportController;
 use App\Http\Controllers\EstimateGenerationCostController;
 use App\Http\Controllers\GenerationController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('generations/estimate', EstimateGenerationCostController::class)
         ->middleware('throttle:generation-estimates')
         ->name('generations.estimate');
+
+    // Operators only (users:make-admin). The Form Request authorizes too, so it's checked twice.
+    Route::get('admin/report', SpendReportController::class)
+        ->middleware('can:view-admin-report')
+        ->name('admin.report');
 });
 
 require __DIR__.'/settings.php';

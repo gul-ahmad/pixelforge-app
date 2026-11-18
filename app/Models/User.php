@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property string $name
  * @property string $email
+ * @property bool $is_admin
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -30,6 +31,16 @@ class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Same default as the database column, so a user object never has is_admin = null
+     * (e.g. right after it's created, before it's re-read from the database).
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'is_admin' => false,
+    ];
 
     /**
      * @return HasMany<Generation, $this>
@@ -49,6 +60,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean',
         ];
     }
 }
